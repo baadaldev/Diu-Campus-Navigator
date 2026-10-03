@@ -63,3 +63,7 @@ New students (freshers), visitors, and day-scholars frequently face several chal
 ---
 
 ## 🏗️ System Architecture
+
+## 🗺️ Roadmap
+- [ ] Interactive 3D building visualizer
+- [ ] Real-time DIU bus scheduling and transit times
