@@ -56,9 +56,13 @@
       </button>
     </nav>
 
-    <!-- Header Actions (Emergency Hotlines) -->
+    <!-- Header Actions (AI Assistant & Emergency Hotlines) -->
     <div class="header-actions">
-      <button class="action-btn emergency-btn" id="open-emergency-btn">
+      <button class="action-btn ai-btn" id="open-ai-btn" title="Ask DIU Smart AI Assistant">
+        <i class="fa-solid fa-wand-magic-sparkles"></i>
+        <span>Ask AI</span>
+      </button>
+      <button class="action-btn emergency-btn" id="open-emergency-btn" title="Campus Emergency Hotlines">
         <i class="fa-solid fa-phone-volume"></i>
         <span>Emergency</span>
       </button>
@@ -434,6 +438,42 @@
     </div>
   </div>
 
+  <!-- DIU AI Smart Campus Assistant Drawer -->
+  <div id="ai-drawer" class="modal-overlay">
+    <div class="modal-card ai-chat-card">
+      <div class="modal-header">
+        <h3><i class="fa-solid fa-wand-magic-sparkles" style="color: var(--emerald-neon);"></i> DIU Campus AI Assistant</h3>
+        <button id="close-ai-btn" class="close-modal-btn">
+          <i class="fa-solid fa-xmark"></i>
+        </button>
+      </div>
+
+      <div class="ai-quick-prompts">
+        <button class="ai-chip" data-prompt="সিএসই ল্যাব কোথায়?">💻 সিএসই ল্যাব কোথায়?</button>
+        <button class="ai-chip" data-prompt="মিরপুরের বাস কখন ছাড়ে?">🚌 মিরপুরের বাস কখন?</button>
+        <button class="ai-chip" data-prompt="দত্তপাড়া যেতে কত ভাড়া?">💰 দত্তপাড়া যেতে কত ভাড়া?</button>
+        <button class="ai-chip" data-prompt="মেডিকেল সেন্টার কোথায়?">🚑 মেডিকেল ও অ্যাম্বুলেন্স</button>
+      </div>
+
+      <div id="ai-chat-messages" class="ai-chat-messages">
+        <div class="ai-msg bot">
+          <div class="msg-avatar"><i class="fa-solid fa-robot"></i></div>
+          <div class="msg-bubble">
+            <strong>হ্যালো! আমি ডিআইইউ ক্যাম্পাস এআই অ্যাসিস্ট্যান্ট। 🎓</strong><br>
+            ক্যাম্পাসের যে কোনো ভবন, ডিপার্টমেন্ট ল্যাব, বাস ছাড়ার সময়, দত্তপাড়া/চান্দগাঁও মেস ভাড়া বা ইমার্জেন্সি বিষয়ে জানতে নিচে লিখুন বা বাটন চাপুন।
+          </div>
+        </div>
+      </div>
+
+      <div class="ai-chat-input-row">
+        <input type="text" id="ai-input" placeholder="যেকোনো প্রশ্ন লিখুন (যেমন: লাইব্রেরি কোথায়? বা বাসের সময়)...">
+        <button id="ai-send-btn" class="ai-send-btn">
+          <i class="fa-solid fa-paper-plane"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Scripts -->
   <!-- Leaflet JS -->
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -446,6 +486,7 @@
   <script src="nodes-data.js"></script>
   <script src="bus-data.js"></script>
   <script src="fare-data.js"></script>
+  <script src="ai-assistant.js"></script>
   <script src="dijkstra.js"></script>
   <script src="three-campus.js"></script>
   <script src="app.js"></script>

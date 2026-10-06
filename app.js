@@ -38,20 +38,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
   L.control.zoom({ position: 'bottomright' }).addTo(map);
 
-  // Base Map Layers (Dark Matter vs High-Res Satellite)
-  const darkTileLayer = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-    attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-    subdomains: 'abcd',
-    maxZoom: 20
-  });
-
-  const satelliteTileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-    attribution: 'Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community',
+  // 100% Free, Reliable, Zero API Key Tile Providers (No 'API Required' watermarks)
+  const streetTileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}', {
+    attribution: '&copy; Esri &mdash; World Street Map',
     maxZoom: 19
   });
 
-  // Start with Dark Matter
-  darkTileLayer.addTo(map);
+  const satelliteTileLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+    attribution: '&copy; Esri &mdash; World Imagery Satellite',
+    maxZoom: 19
+  });
+
+  // Default to crisp street map
+  streetTileLayer.addTo(map);
 
   const markersLayer = L.layerGroup().addTo(map);
   const routePolylineGroup = L.layerGroup().addTo(map);
@@ -82,6 +81,16 @@ document.addEventListener('DOMContentLoaded', () => {
   const openEmergencyBtn = document.getElementById('open-emergency-btn');
   const closeEmergencyBtn = document.getElementById('close-emergency-btn');
 
+  // AI Assistant Elements
+  const aiDrawer = document.getElementById('ai-drawer');
+  const openAiBtn = document.getElementById('open-ai-btn');
+  const closeAiBtn = document.getElementById('close-ai-btn');
+  const aiInput = document.getElementById('ai-input');
+  const aiSendBtn = document.getElementById('ai-send-btn');
+  const aiMessages = document.getElementById('ai-chat-messages');
+  const aiChips = document.querySelectorAll('.ai-chip');
+  const aiAssistant = window.DiuAiAssistant ? new window.DiuAiAssistant() : null;
+
   // Bus Fleet Elements
   const busRoutesGrid = document.getElementById('bus-routes-grid');
   const busSearchInput = document.getElementById('bus-search-input');
@@ -97,14 +106,90 @@ document.addEventListener('DOMContentLoaded', () => {
   const dirFilterBtns = document.querySelectorAll('.dir-filter-btn');
   const directoryGrid = document.getElementById('directory-grid');
 
+  const DIRECTORY_ITEMS = [
+    {
+      name: "Dattapara Student Hub & Market",
+      area: "dattapara",
+      areaName: "দত্তপাড়া",
+      category: "Market & Services",
+      desc: "Major student junction with 15+ photocopy stores, restaurants, pharmacy and grocery shops.",
+      highlights: "Photocopy: ৳১.৫/page, Bhai Bhai Hotel, Easybike Stand",
+      nodeId: "dattapara_junction"
+    },
+    {
+      name: "Dattapara Student Mess Cluster (50+ Messes)",
+      area: "dattapara",
+      areaName: "দত্তপাড়া",
+      category: "Student Housing",
+      desc: "Top student bachelor residential zone. Average seat rent ৳২,৫00 - ৳৪,৫00 per month including meal options.",
+      highlights: "Wi-Fi, 24/7 Water, Generator Backup, Meal System",
+      nodeId: "dattapara_mess_lane"
+    },
+    {
+      name: "Chandgaon Residential Hub (চান্দগাঁও মোড়)",
+      area: "chandgaon",
+      areaName: "চান্দগাঁও",
+      category: "Housing & Dining",
+      desc: "Quiet residential neighborhood 5 minutes from campus. Ideal for senior students preferring peaceful study environments.",
+      highlights: "Seat rent: ৳২,২০০ - ৳৩,৮০০, Evening tea & snack stalls",
+      nodeId: "chandgaon_mor"
+    },
+    {
+      name: "Chandgaon Student Hostels & Bachelor Flats",
+      area: "chandgaon",
+      areaName: "চান্দগাঁও",
+      category: "Student Housing",
+      desc: "Modern multi-storied apartment buildings rented exclusively to DIU students.",
+      highlights: "Quiet locality, safe neighborhood, affordable rates",
+      nodeId: "chandgaon_mess_lane"
+    },
+    {
+      name: "Khagan Central Bazar & Bus Terminal",
+      area: "khagan",
+      areaName: "খাগান",
+      category: "Market & Transport",
+      desc: "Largest commercial market center near campus. Fresh vegetable market, super shops, banks, ATMs & Savar bus connection.",
+      highlights: "Dutch-Bangla ATM, Bkash agents, Supermarkets, Fruit stalls",
+      nodeId: "khagan_bazar"
+    },
+    {
+      name: "Khagan Student Mess Lane (Shapla / Padma)",
+      area: "khagan",
+      areaName: "খাগান",
+      category: "Student Housing",
+      desc: "Extensive student hostel corridor with high-capacity hostels for both male and female university students.",
+      highlights: "High-speed broadband, attached bath, dining halls",
+      nodeId: "khagan_student_mess"
+    },
+    {
+      name: "Charulata Food Court & Student Canteen",
+      area: "campus",
+      areaName: "অন-ক্যাম্পাস",
+      category: "Campus Dining",
+      desc: "Central university cafeteria with breakfast, lunch dining halls, snacks, fresh juice & coffee bar.",
+      highlights: "Subsidized lunch plates: ৳৫০ - ৳৮০, Air-conditioned seating",
+      nodeId: "central_cafeteria"
+    },
+    {
+      name: "DIU 24/7 Medical Center & Pharmacy",
+      area: "campus",
+      areaName: "অন-ক্যাম্পাস",
+      category: "Emergency & Health",
+      desc: "On-campus health center offering free doctor consultations, first aid, medicines and 24/7 emergency ambulance.",
+      highlights: "Emergency Hotline: 01847-140120, Free checkup for students",
+      nodeId: "diu_medical"
+    }
+  ];
+
   // ================= INITIAL LOAD =================
+  setupEventListeners();
   populateLocationSelectors();
   renderMarkers();
   calculateAndDisplayRoute();
   renderBusFleet();
   initFareModule();
   renderDirectory();
-  setupEventListeners();
+  initAiAssistant();
 
   // ================= 1. TAB NAVIGATION CONTROLLER =================
   navTabBtns.forEach(btn => {
@@ -258,16 +343,17 @@ document.addEventListener('DOMContentLoaded', () => {
     const rickshawItem = document.getElementById('hud-rickshaw-time');
     const farePill = document.getElementById('hud-fare-badge');
 
-    if (result.rickshawPossible) {
-      rickshawItem.textContent = `${result.rickshawTimeMin} min`;
+    const hasRickshaw = (result.mode === 'rickshaw' || result.estimatedFareBDT > 0);
+    if (hasRickshaw && result.estimatedFareBDT > 0) {
+      rickshawItem.textContent = `${result.rickshawTimeMin || 5} min`;
       farePill.style.display = 'inline-flex';
-      farePill.innerHTML = `<i class="fa-solid fa-ticket"></i> Rickshaw Fare: ৳${result.estimatedFareBDT} BDT`;
+      farePill.innerHTML = `<i class="fa-solid fa-ticket"></i> Rickshaw: ৳${result.estimatedFareBDT} BDT`;
     } else {
       rickshawItem.textContent = 'Walk Only';
       farePill.style.display = 'none';
     }
 
-    renderTurnByTurnDirections(result.directions);
+    renderTurnByTurnDirections(result.steps || []);
 
     // Draw Route Polyline on 2D Map
     routePolylineGroup.clearLayers();
@@ -300,16 +386,21 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  function renderTurnByTurnDirections(directions) {
+  function renderTurnByTurnDirections(steps) {
     const list = document.getElementById('steps-list');
     if (!list) return;
 
-    list.innerHTML = directions.map(d => `
+    if (!steps || !steps.length) {
+      list.innerHTML = '<div style="color: var(--text-muted); font-size: 12px; padding: 8px;">No step-by-step directions needed.</div>';
+      return;
+    }
+
+    list.innerHTML = steps.map(d => `
       <div class="step-card">
-        <div class="step-num">${d.step}</div>
+        <div class="step-num">${d.stepNumber || 1}</div>
         <div class="step-text">
           <strong>${d.instruction}</strong>
-          ${d.detail ? `<span>${d.detail}</span>` : ''}
+          ${d.bengaliInstruction ? `<span style="font-size: 11px; color: var(--emerald-neon); display: block; margin-top: 2px;">${d.bengaliInstruction}</span>` : ''}
         </div>
       </div>
     `).join('');
@@ -483,81 +574,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ================= 7. MODULE: AREA & STUDENT DIRECTORY =================
-  const DIRECTORY_ITEMS = [
-    {
-      name: "Dattapara Student Hub & Market",
-      area: "dattapara",
-      areaName: "দত্তপাড়া",
-      category: "Market & Services",
-      desc: "Major student junction with 15+ photocopy stores, restaurants, pharmacy and grocery shops.",
-      highlights: "Photocopy: ৳১.৫/page, Bhai Bhai Hotel, Easybike Stand",
-      nodeId: "dattapara_junction"
-    },
-    {
-      name: "Dattapara Student Mess Cluster (50+ Messes)",
-      area: "dattapara",
-      areaName: "দত্তপাড়া",
-      category: "Student Housing",
-      desc: "Top student bachelor residential zone. Average seat rent ৳২,৫00 - ৳৪,৫00 per month including meal options.",
-      highlights: "Wi-Fi, 24/7 Water, Generator Backup, Meal System",
-      nodeId: "dattapara_mess_lane"
-    },
-    {
-      name: "Chandgaon Residential Hub (চান্দগাঁও মোড়)",
-      area: "chandgaon",
-      areaName: "চান্দগাঁও",
-      category: "Housing & Dining",
-      desc: "Quiet residential neighborhood 5 minutes from campus. Ideal for senior students preferring peaceful study environments.",
-      highlights: "Seat rent: ৳২,২০০ - ৳৩,৮০০, Evening tea & snack stalls",
-      nodeId: "chandgaon_mor"
-    },
-    {
-      name: "Chandgaon Student Hostels & Bachelor Flats",
-      area: "chandgaon",
-      areaName: "চান্দগাঁও",
-      category: "Student Housing",
-      desc: "Modern multi-storied apartment buildings rented exclusively to DIU students.",
-      highlights: "Quiet locality, safe neighborhood, affordable rates",
-      nodeId: "chandgaon_mess_lane"
-    },
-    {
-      name: "Khagan Central Bazar & Bus Terminal",
-      area: "khagan",
-      areaName: "খাগান",
-      category: "Market & Transport",
-      desc: "Largest commercial market center near campus. Fresh vegetable market, super shops, banks, ATMs & Savar bus connection.",
-      highlights: "Dutch-Bangla ATM, Bkash agents, Supermarkets, Fruit stalls",
-      nodeId: "khagan_bazar"
-    },
-    {
-      name: "Khagan Student Mess Lane (Shapla / Padma)",
-      area: "khagan",
-      areaName: "খাগান",
-      category: "Student Housing",
-      desc: "Extensive student hostel corridor with high-capacity hostels for both male and female university students.",
-      highlights: "High-speed broadband, attached bath, dining halls",
-      nodeId: "khagan_student_mess"
-    },
-    {
-      name: "Charulata Food Court & Student Canteen",
-      area: "campus",
-      areaName: "অন-ক্যাম্পাস",
-      category: "Campus Dining",
-      desc: "Central university cafeteria with breakfast, lunch dining halls, snacks, fresh juice & coffee bar.",
-      highlights: "Subsidized lunch plates: ৳৫০ - ৳৮০, Air-conditioned seating",
-      nodeId: "central_cafeteria"
-    },
-    {
-      name: "DIU 24/7 Medical Center & Pharmacy",
-      area: "campus",
-      areaName: "অন-ক্যাম্পাস",
-      category: "Emergency & Health",
-      desc: "On-campus health center offering free doctor consultations, first aid, medicines and 24/7 emergency ambulance.",
-      highlights: "Emergency Hotline: 01847-140120, Free checkup for students",
-      nodeId: "diu_medical"
-    }
-  ];
-
   function renderDirectory() {
     if (!directoryGrid) return;
 
@@ -599,7 +615,137 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // ================= 8. EVENT LISTENERS SETUP =================
+  // ================= 8. MODULE: AI CAMPUS ASSISTANT =================
+  function initAiAssistant() {
+    if (!aiDrawer || !aiAssistant) return;
+
+    function appendMessage(sender, text, title = '', action = null) {
+      if (!aiMessages) return;
+
+      const msgDiv = document.createElement('div');
+      msgDiv.className = `ai-msg ${sender}`;
+
+      const avatarHtml = sender === 'bot'
+        ? `<div class="msg-avatar"><i class="fa-solid fa-robot"></i></div>`
+        : `<div class="msg-avatar"><i class="fa-solid fa-user"></i></div>`;
+
+      // Format markdown-like bold and line breaks safely
+      let formattedText = text
+        .replace(/\n/g, '<br>')
+        .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+
+      let actionHtml = '';
+      if (action) {
+        let actionIcon = 'fa-compass';
+        if (action.type === 'navigate') actionIcon = 'fa-diamond-turn-right';
+        else if (action.type === 'tab') actionIcon = 'fa-table-columns';
+        else if (action.type === 'modal') actionIcon = 'fa-phone-volume';
+
+        actionHtml = `
+          <div style="margin-top: 8px;">
+            <button class="ai-action-btn" data-type="${action.type}" data-target="${action.targetId || action.targetTab || action.modalId || ''}">
+              <i class="fa-solid ${actionIcon}"></i> ${action.label}
+            </button>
+          </div>
+        `;
+      }
+
+      msgDiv.innerHTML = sender === 'bot'
+        ? `${avatarHtml}<div class="msg-bubble">${title ? `<strong>${title}</strong><br>` : ''}${formattedText}${actionHtml}</div>`
+        : `<div class="msg-bubble">${formattedText}</div>${avatarHtml}`;
+
+      aiMessages.appendChild(msgDiv);
+      aiMessages.scrollTop = aiMessages.scrollHeight;
+
+      // Attach action button listener
+      const actionBtn = msgDiv.querySelector('.ai-action-btn');
+      if (actionBtn) {
+        actionBtn.addEventListener('click', () => {
+          handleAiAction(action);
+        });
+      }
+    }
+
+    function handleAiAction(action) {
+      if (!action) return;
+      aiDrawer.classList.remove('active');
+
+      if (action.type === 'navigate') {
+        const navTab = document.querySelector('.nav-tab-btn[data-tab="navigator"]');
+        if (navTab) navTab.click();
+        destSelect.value = action.targetId;
+        if (!originSelect.value || originSelect.value === action.targetId) {
+          originSelect.value = 'diu_main_gate';
+        }
+        calculateAndDisplayRoute();
+      } else if (action.type === 'tab') {
+        const tabBtn = document.querySelector(`.nav-tab-btn[data-tab="${action.targetTab}"]`);
+        if (tabBtn) tabBtn.click();
+      } else if (action.type === 'modal') {
+        const modal = document.getElementById(action.modalId);
+        if (modal) modal.classList.add('active');
+      }
+    }
+
+    function handleSend() {
+      const q = aiInput.value.trim();
+      if (!q) return;
+
+      appendMessage('user', q);
+      aiInput.value = '';
+
+      setTimeout(() => {
+        const res = aiAssistant.ask(q);
+        if (res) {
+          appendMessage('bot', res.answer, res.title, res.action);
+        }
+      }, 200);
+    }
+
+    if (openAiBtn) {
+      openAiBtn.addEventListener('click', () => {
+        aiDrawer.classList.add('active');
+        if (aiInput) aiInput.focus();
+      });
+    }
+
+    if (closeAiBtn) {
+      closeAiBtn.addEventListener('click', () => {
+        aiDrawer.classList.remove('active');
+      });
+    }
+
+    aiDrawer.addEventListener('click', (e) => {
+      if (e.target === aiDrawer) {
+        aiDrawer.classList.remove('active');
+      }
+    });
+
+    if (aiSendBtn) {
+      aiSendBtn.addEventListener('click', handleSend);
+    }
+
+    if (aiInput) {
+      aiInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          handleSend();
+        }
+      });
+    }
+
+    aiChips.forEach(chip => {
+      chip.addEventListener('click', () => {
+        const prompt = chip.dataset.prompt;
+        if (prompt) {
+          aiInput.value = prompt;
+          handleSend();
+        }
+      });
+    });
+  }
+
+  // ================= 9. EVENT LISTENERS SETUP =================
   function setupEventListeners() {
     // Origin & Destination Select Changes
     if (originSelect) originSelect.addEventListener('change', () => calculateAndDisplayRoute());
