@@ -31,40 +31,56 @@
         <h1>DIU <span>Smart Navigator</span></h1>
         <div class="brand-subtitle">
           <span class="status-dot"></span>
-          <span>Ashulia Permanent Campus &amp; Student Mess Hubs</span>
+          <span>Ashulia Campus, Dattapara &amp; Chandgaon Student Hub</span>
         </div>
       </div>
     </div>
 
-    <!-- View Switcher (2D GPS Map vs 3D Cyber Hologram) -->
-    <div class="view-switcher-group">
-      <button class="view-btn active" data-view="2d">
+    <!-- Main Module Navigation Tabs -->
+    <nav class="app-nav-tabs">
+      <button class="nav-tab-btn active" data-tab="navigator">
+        <i class="fa-solid fa-compass"></i>
+        <span>Campus Navigator</span>
+      </button>
+      <button class="nav-tab-btn" data-tab="buses">
+        <i class="fa-solid fa-bus"></i>
+        <span>DIU Bus Fleet</span>
+      </button>
+      <button class="nav-tab-btn" data-tab="fares">
+        <i class="fa-solid fa-receipt"></i>
+        <span>Fare Guide</span>
+      </button>
+      <button class="nav-tab-btn" data-tab="directory">
         <i class="fa-solid fa-map-location-dot"></i>
-        <span>2D Live Map</span>
+        <span>Area Directory</span>
       </button>
-      <button class="view-btn" data-view="3d">
-        <i class="fa-solid fa-cube"></i>
-        <span>3D Cyber View</span>
-      </button>
-    </div>
+    </nav>
 
-    <!-- Header Actions -->
+    <!-- Header Actions (Emergency Hotlines) -->
     <div class="header-actions">
       <button class="action-btn emergency-btn" id="open-emergency-btn">
         <i class="fa-solid fa-phone-volume"></i>
-        <span>Campus Emergency</span>
+        <span>Emergency</span>
       </button>
     </div>
   </header>
 
-  <!-- Main Viewports Wrapper -->
-  <main class="main-wrapper">
+  <!-- ================= MODULE 1: CAMPUS NAVIGATOR (2D & 3D) ================= -->
+  <main id="view-navigator" class="main-wrapper module-view active">
 
     <!-- Navigator HUD / Sidebar -->
     <aside class="navigator-hud">
       <div class="hud-header">
         <h2><i class="fa-solid fa-route"></i> Campus Pathfinder</h2>
-        <span class="badge-diu" style="font-size: 10px; color: var(--emerald-neon); font-weight: 700; font-family: var(--font-mono);">v1.0 ONLINE</span>
+        <!-- 2D / 3D Switcher Pill inside HUD -->
+        <div class="view-switcher-mini">
+          <button class="view-btn active" data-view="2d" title="Leaflet 2D Live GPS Map">
+            <i class="fa-solid fa-map"></i> 2D Map
+          </button>
+          <button class="view-btn" data-view="3d" title="Three.js 3D Interactive World">
+            <i class="fa-solid fa-cube"></i> 3D World
+          </button>
+        </div>
       </div>
 
       <div class="hud-body">
@@ -94,12 +110,12 @@
           <div class="mode-card active" data-mode="walking">
             <i class="fa-solid fa-person-walking"></i>
             <span>Walking</span>
-            <span class="mode-badge">Shortcuts &amp; Lake Path</span>
+            <span class="mode-badge">Shortcuts &amp; Lake</span>
           </div>
           <div class="mode-card" data-mode="rickshaw">
             <i class="fa-solid fa-car-side"></i>
-            <span>Rickshaw</span>
-            <span class="mode-badge">Paved Roads &amp; Fare Calc</span>
+            <span>Rickshaw / Auto</span>
+            <span class="mode-badge">Paved &amp; Fare Calc</span>
           </div>
         </div>
 
@@ -149,11 +165,11 @@
           <div class="category-pills">
             <button class="cat-pill active" data-cat="all">All</button>
             <button class="cat-pill" data-cat="building">Academic</button>
-            <button class="cat-pill" data-cat="mess">Mess &amp; Hostel</button>
-            <button class="cat-pill" data-cat="food">Food &amp; Dining</button>
-            <button class="cat-pill" data-cat="facility">Facilities</button>
+            <button class="cat-pill" data-cat="area">Student Hubs</button>
+            <button class="cat-pill" data-cat="mess">Messes &amp; Halls</button>
+            <button class="cat-pill" data-cat="food">Dining</button>
+            <button class="cat-pill" data-cat="facility">Campus</button>
             <button class="cat-pill" data-cat="entrance">Gates</button>
-            <button class="cat-pill" data-cat="medical">Medical</button>
           </div>
         </div>
 
@@ -169,12 +185,12 @@
               <span><i class="fa-solid fa-bolt" style="color: var(--amber-accent); margin-right: 6px;"></i> Dattapara Hub ➔ Charulata Canteen</span>
               <i class="fa-solid fa-chevron-right" style="font-size: 10px; color: var(--text-muted);"></i>
             </div>
-            <div class="preset-chip" data-from="diu_main_gate" data-to="knowledge_tower">
-              <span><i class="fa-solid fa-bolt" style="color: var(--amber-accent); margin-right: 6px;"></i> Main Gate ➔ Admin Tower</span>
+            <div class="preset-chip" data-from="chandgaon_mor" data-to="knowledge_tower">
+              <span><i class="fa-solid fa-bolt" style="color: var(--amber-accent); margin-right: 6px;"></i> Chandgaon ➔ Admin Tower</span>
               <i class="fa-solid fa-chevron-right" style="font-size: 10px; color: var(--text-muted);"></i>
             </div>
-            <div class="preset-chip" data-from="central_mosque" data-to="model_town_gate">
-              <span><i class="fa-solid fa-bolt" style="color: var(--amber-accent); margin-right: 6px;"></i> Mosque ➔ Model Town Gate</span>
+            <div class="preset-chip" data-from="diu_main_gate" data-to="diu_lake">
+              <span><i class="fa-solid fa-bolt" style="color: var(--amber-accent); margin-right: 6px;"></i> Main Gate ➔ DIU Lake &amp; Bridge</span>
               <i class="fa-solid fa-chevron-right" style="font-size: 10px; color: var(--text-muted);"></i>
             </div>
           </div>
@@ -182,35 +198,199 @@
       </div>
     </aside>
 
-    <!-- Viewports Container (2D Map + 3D Hologram) -->
+    <!-- Viewports Container (2D Map + 3D Three.js Scene) -->
     <div class="viewport-container">
       <!-- 2D Leaflet GPS Map -->
-      <div id="map-2d"></div>
+      <div id="map-2d">
+        <!-- Floating Satellite Toggle Button on 2D Map -->
+        <div class="map-layer-switch">
+          <button id="toggle-satellite-btn" class="layer-btn" title="Toggle Real Satellite Imagery">
+            <i class="fa-solid fa-satellite"></i>
+            <span>Satellite View</span>
+          </button>
+        </div>
+      </div>
 
       <!-- 3D Three.js Cyber Canvas -->
       <div id="canvas-3d-container"></div>
 
-      <!-- 3D Camera Controls Floating Bar -->
+      <!-- 3D Camera Controls Floating Bar with Area Focus Teleports -->
       <div id="three-controls-bar" class="three-controls-bar" style="display: none;">
-        <button class="cam-btn" data-cam="iso" title="Isometric Perspective">
-          <i class="fa-solid fa-cube"></i>
-          <span>Isometric</span>
+        <button class="cam-btn" data-cam="diu" title="Focus DIU Core Campus">
+          <i class="fa-solid fa-graduation-cap"></i>
+          <span>Campus</span>
         </button>
-        <button class="cam-btn" data-cam="top" title="Top-down Map Angle">
+        <button class="cam-btn" data-cam="dattapara" title="Focus Dattapara Student Hub">
+          <i class="fa-solid fa-store"></i>
+          <span>দত্তপাড়া</span>
+        </button>
+        <button class="cam-btn" data-cam="chandgaon" title="Focus Chandgaon Residential Hub">
+          <i class="fa-solid fa-house-chimney"></i>
+          <span>চান্দগাঁও</span>
+        </button>
+        <button class="cam-btn" data-cam="khagan" title="Focus Khagan Bazar">
+          <i class="fa-solid fa-cart-shopping"></i>
+          <span>খাগান</span>
+        </button>
+        <button class="cam-btn" data-cam="top" title="Top-down Map View">
           <i class="fa-solid fa-satellite"></i>
           <span>Top-Down</span>
         </button>
-        <button class="cam-btn" data-cam="tower" title="Focus on Knowledge Tower">
-          <i class="fa-solid fa-building"></i>
-          <span>Tower</span>
+        <button class="cam-btn" data-cam="iso" title="Isometric Angle">
+          <i class="fa-solid fa-cube"></i>
+          <span>Iso</span>
         </button>
         <button class="cam-btn" data-cam="auto" title="Toggle Auto-Rotation">
           <i class="fa-solid fa-rotate"></i>
           <span>Rotate</span>
         </button>
+        <button class="cam-btn light-mode-btn" id="toggle-light-mode-btn" title="Toggle Day / Night Lighting">
+          <i class="fa-solid fa-moon"></i>
+          <span>Night</span>
+        </button>
       </div>
     </div>
   </main>
+
+  <!-- ================= MODULE 2: DIU BUS FLEET & SCHEDULES ================= -->
+  <section id="view-buses" class="module-view full-page-view">
+    <div class="module-container">
+      <div class="module-header-banner">
+        <div class="banner-title">
+          <h2><i class="fa-solid fa-bus-simple"></i> DIU Transport &amp; Shuttle Fleet</h2>
+          <p>Official student bus routes, live stoppage schedules, departure times, and fleet tracker</p>
+        </div>
+        <div class="fleet-quick-stats">
+          <div class="f-stat"><span class="stat-num">45+</span><span class="stat-lbl">Active Buses</span></div>
+          <div class="f-stat"><span class="stat-num">8</span><span class="stat-lbl">City Routes</span></div>
+          <div class="f-stat"><span class="stat-num">100%</span><span class="stat-lbl">Campus Fleet</span></div>
+        </div>
+      </div>
+
+      <!-- Live Bus Filter & Search Bar -->
+      <div class="bus-search-bar">
+        <div class="search-input-wrap">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text" id="bus-search-input" placeholder="Search stoppage or route (e.g. Uttara, Mirpur, Airport, Savar, Dhanmondi)...">
+        </div>
+        <div class="shift-toggle-group">
+          <button class="shift-btn active" data-shift="morning">
+            <i class="fa-solid fa-sun"></i> Morning (To Campus)
+          </button>
+          <button class="shift-btn" data-shift="return">
+            <i class="fa-solid fa-moon"></i> Afternoon (From Campus)
+          </button>
+        </div>
+      </div>
+
+      <!-- Bus Routes Grid -->
+      <div id="bus-routes-grid" class="bus-routes-grid">
+        <!-- Rendered dynamically by JS -->
+      </div>
+
+      <!-- Fleet Names & Transport Rules Card -->
+      <div class="bus-footer-info-grid">
+        <div class="info-card">
+          <h3><i class="fa-solid fa-shield-halved"></i> Transport Guidelines &amp; Rules</h3>
+          <ul>
+            <li><i class="fa-solid fa-circle-check"></i> Student ID Card / DIU Smart Transport Card is strictly mandatory.</li>
+            <li><i class="fa-solid fa-circle-check"></i> Arrive at stoppage at least 7-10 minutes prior to scheduled departure.</li>
+            <li><i class="fa-solid fa-circle-check"></i> Buses leave sharp at scheduled departure times from DSC Terminal.</li>
+            <li><i class="fa-solid fa-circle-check"></i> Friday and Saturday follow special exam/weekend timetables.</li>
+          </ul>
+        </div>
+        <div class="info-card">
+          <h3><i class="fa-solid fa-id-card"></i> Transport Section Contact</h3>
+          <p><strong>Location:</strong> DIU Campus Bus Terminal (Beside Main Gate)</p>
+          <p><strong>Hotline:</strong> <a href="tel:01847140066" style="color: var(--emerald-neon);">01847-140066</a> / <a href="tel:01847140067" style="color: var(--emerald-neon);">01847-140067</a></p>
+          <p><strong>Email:</strong> transport@daffodilvarsity.edu.bd</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= MODULE 3: FARE GUIDE & CALCULATOR ================= -->
+  <section id="view-fares" class="module-view full-page-view">
+    <div class="module-container">
+      <div class="module-header-banner fare-banner">
+        <div class="banner-title">
+          <h2><i class="fa-solid fa-receipt"></i> Local Transport Fare Matrix &amp; Calculator</h2>
+          <p>Authentic rates for Easybike (Shared Auto), Manual Rickshaws, and Campus Shuttles</p>
+        </div>
+      </div>
+
+      <!-- Interactive Calculator Card -->
+      <div class="fare-calc-card">
+        <h3><i class="fa-solid fa-calculator"></i> Quick Fare &amp; Route Cost Estimator</h3>
+        <div class="calc-row">
+          <div class="calc-input">
+            <label>Origin Point</label>
+            <select id="fare-origin-select" class="styled-select"></select>
+          </div>
+          <div class="calc-swap">
+            <i class="fa-solid fa-arrow-right-arrow-left"></i>
+          </div>
+          <div class="calc-input">
+            <label>Destination</label>
+            <select id="fare-dest-select" class="styled-select"></select>
+          </div>
+        </div>
+
+        <div id="fare-calc-result" class="calc-result-box">
+          <!-- Dynamic fare calculation result -->
+        </div>
+      </div>
+
+      <!-- Full Fare Reference Table -->
+      <div class="fare-table-wrap">
+        <h3><i class="fa-solid fa-table-list"></i> Complete Campus &amp; Surrounding Area Fare Matrix</h3>
+        <table class="fare-table">
+          <thead>
+            <tr>
+              <th>From</th>
+              <th>To</th>
+              <th>Distance</th>
+              <th>Shared Auto (ইজিবাইক)</th>
+              <th>Reserved Rickshaw</th>
+              <th>Walk Time</th>
+              <th>Student Tips</th>
+            </tr>
+          </thead>
+          <tbody id="fare-table-body">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= MODULE 4: SURROUNDING AREA DIRECTORY ================= -->
+  <section id="view-directory" class="module-view full-page-view">
+    <div class="module-container">
+      <div class="module-header-banner dir-banner">
+        <div class="banner-title">
+          <h2><i class="fa-solid fa-map-location-dot"></i> Surrounding Area &amp; Student Directory</h2>
+          <p>Student messes, bachelor housing, dining hubs, printing shops &amp; medical stores in Dattapara, Chandgaon &amp; Khagan</p>
+        </div>
+      </div>
+
+      <!-- Directory Filter Bar -->
+      <div class="dir-filter-bar">
+        <div class="filter-group">
+          <button class="dir-filter-btn active" data-filter="all">All Places</button>
+          <button class="dir-filter-btn" data-filter="dattapara">দত্তপাড়া (Dattapara)</button>
+          <button class="dir-filter-btn" data-filter="chandgaon">চান্দগাঁও (Chandgaon)</button>
+          <button class="dir-filter-btn" data-filter="khagan">খাগান (Khagan)</button>
+          <button class="dir-filter-btn" data-filter="campus">অন-ক্যাম্পাস (DIU Core)</button>
+        </div>
+      </div>
+
+      <!-- Directory Cards Grid -->
+      <div id="directory-grid" class="directory-grid">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+  </section>
 
   <!-- Emergency Assistance Modal -->
   <div id="emergency-modal" class="modal-overlay">
@@ -224,29 +404,29 @@
       <div class="contact-list">
         <div class="contact-item">
           <div class="contact-info">
-            <h4>DIU Medical Center (24/7)</h4>
-            <p>Immediate ambulance &amp; on-campus doctor</p>
+            <h4>DIU Medical Center (24/7 Clinic &amp; Ambulance)</h4>
+            <p>Immediate medical attention, emergency doctor &amp; ambulance</p>
           </div>
           <a href="tel:01847140120" class="contact-number">01847-140120</a>
         </div>
         <div class="contact-item">
           <div class="contact-info">
             <h4>DIU Security &amp; Control Room</h4>
-            <p>Main gate checkpost &amp; campus patrol</p>
+            <p>Main gate checkpost, campus safety &amp; patrol</p>
           </div>
           <a href="tel:01811458850" class="contact-number">01811-458850</a>
         </div>
         <div class="contact-item">
           <div class="contact-info">
             <h4>Proctor Office &amp; Discipline</h4>
-            <p>Student safety &amp; disciplinary assistance</p>
+            <p>Student welfare, dispute resolution &amp; discipline</p>
           </div>
           <a href="tel:01847140011" class="contact-number">01847-140011</a>
         </div>
         <div class="contact-item">
           <div class="contact-info">
-            <h4>Transport Section (Bus Fleet)</h4>
-            <p>Student shuttle schedules &amp; lost property</p>
+            <h4>Transport Section (Bus Fleet &amp; Lost Property)</h4>
+            <p>Shuttle schedule inquiries, lost items &amp; driver control</p>
           </div>
           <a href="tel:01847140066" class="contact-number">01847-140066</a>
         </div>
@@ -262,8 +442,10 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
 
-  <!-- Application Logic -->
+  <!-- Application Logic & Databases -->
   <script src="nodes-data.js"></script>
+  <script src="bus-data.js"></script>
+  <script src="fare-data.js"></script>
   <script src="dijkstra.js"></script>
   <script src="three-campus.js"></script>
   <script src="app.js"></script>

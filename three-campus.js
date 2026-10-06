@@ -1,13 +1,15 @@
 /**
- * DIU Smart Campus Navigator - Three.js 3D Interactive Holographic Campus
- * Renders an isometric 3D cyber-campus model of Daffodil International University (DIU)
- * and its surrounding residential mess hubs (Khagan, Dattapara, Changaon, Sadhupara, Model Town).
+ * DIU Smart Campus Navigator - Realistic 3D Campus Architectural Engine (Three.js)
+ * High-fidelity architectural representation of Daffodil International University (Ashulia Campus - DSC)
+ * Based on Google Maps satellite layout, campus photography, and architectural blueprints.
+ * Features: Day/Night lighting, realistic glass facades, wooden lake footbridge, running track,
+ * skybridge, detailed mess hubs (Khagan, Dattapara, Changaon, Model Town), and laser route animation.
  */
 
 class Campus3DViewer {
   constructor(containerId, onNodeSelect) {
     this.container = document.getElementById(containerId);
-    this.onNodeSelect = onNodeSelect; // callback when a building/node is clicked
+    this.onNodeSelect = onNodeSelect;
 
     this.scene = null;
     this.camera = null;
@@ -16,24 +18,27 @@ class Campus3DViewer {
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
 
-    this.buildingMeshes = new Map(); // nodeId -> mesh group
+    this.buildingMeshes = new Map();
     this.interactiveObjects = [];
     this.activeRouteLine = null;
     this.hoveredObject = null;
     this.isAutoRotating = false;
+    this.lightingMode = 'day'; // 'day' | 'night'
     this.clock = new THREE.Clock();
 
-    // Map geo coordinates (lat, lng) to 3D world space (X, Z)
-    // DIU Campus center: lat 23.8778, lng 90.3206 -> (0, 0) in 3D
+    // Reusable Materials & Geometries Library
+    this.materials = {};
+    this.nightLights = []; // dynamic lights for night mode
+
+    // Campus Geo Anchor (Knowledge Tower center: 23.8778 N, 90.3206 E)
     this.centerLat = 23.8778;
     this.centerLng = 90.3206;
-    this.coordScale = 45000; // scaling factor for geo to 3D units
+    this.coordScale = 45000;
 
     this.init();
   }
 
   geoTo3D(lat, lng) {
-    // Mercator-like local flat projection centered at campus
     const x = (lng - this.centerLng) * this.coordScale;
     const z = -(lat - this.centerLat) * this.coordScale;
     return { x, z };
@@ -43,127 +48,204 @@ class Campus3DViewer {
     if (!this.container) return;
 
     const width = this.container.clientWidth || window.innerWidth;
-    const height = this.container.clientHeight || (window.innerHeight - 70);
+    const height = this.container.clientHeight || (window.innerHeight - 64);
 
-    // 1. Scene
+    // 1. Scene setup
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color(0x070b09);
-    this.scene.fog = new THREE.FogExp2(0x070b09, 0.0018);
+    this.scene.background = new THREE.Color(0xd6eaf8); // daytime soft sky
+    this.scene.fog = new THREE.FogExp2(0xd6eaf8, 0.0012);
 
-    // 2. Camera (Isometric Perspective)
-    this.camera = new THREE.PerspectiveCamera(45, width / height, 1, 3000);
-    this.camera.position.set(0, 380, 480);
+    // 2. Camera (Realistic Angled Aerial View)
+    this.camera = new THREE.PerspectiveCamera(42, width / height, 1, 3500);
+    this.camera.position.set(0, 360, 490);
 
-    // 3. Renderer with antialiasing
-    this.renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false, powerPreference: "high-performance" });
+    // 3. Renderer with high visual fidelity
+    this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
     this.renderer.setSize(width, height);
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
     this.container.appendChild(this.renderer.domElement);
 
     // 4. Orbit Controls
     if (window.THREE && THREE.OrbitControls) {
       this.controls = new THREE.OrbitControls(this.camera, this.renderer.domElement);
       this.controls.enableDamping = true;
-      this.controls.dampingFactor = 0.05;
-      this.controls.maxPolarAngle = Math.PI / 2.1; // don't go below ground
-      this.controls.minDistance = 80;
-      this.controls.maxDistance = 1200;
+      this.controls.dampingFactor = 0.06;
+      this.controls.maxPolarAngle = Math.PI / 2.05;
+      this.controls.minDistance = 70;
+      this.controls.maxDistance = 1400;
       this.controls.target.set(0, 0, 0);
     }
 
-    // 5. Lighting
+    // 5. Materials Cache
+    this.buildMaterialsLibrary();
+
+    // 6. Lighting System
     this.setupLighting();
 
-    // 6. Terrain & Roads
-    this.createTerrainGrid();
+    // 7. Realistic Terrain & Landscaping
+    this.createRealisticTerrain();
+
+    // 8. Road Network & Markings
     this.createRoadNetwork();
 
-    // 7. DIU Campus Architecture
+    // 9. DIU Campus Architectural Landmarks
     this.buildCampusLandmarks();
 
-    // 8. Surrounding Mess Areas & Hubs
+    // 10. Surrounding Student Mess Hubs
     this.buildSurroundingHubs();
 
-    // 9. Floating Cyber Atmosphere & Particles
+    // 11. Streetlights & Campus Vegetation
+    this.populateCampusEnvironment();
+
+    // 12. Floating Atmospheric Particles
     this.createAtmosphereParticles();
 
-    // 10. Event Listeners
+    // 13. Event Listeners
     window.addEventListener('resize', () => this.onWindowResize());
     this.container.addEventListener('mousemove', (e) => this.onPointerMove(e));
     this.container.addEventListener('click', (e) => this.onClick(e));
 
-    // 11. Animation Loop
+    // 14. Start Animation Loop
     this.animate = this.animate.bind(this);
     requestAnimationFrame(this.animate);
   }
 
-  setupLighting() {
-    // Ambient soft emerald/cyan light
-    const ambientLight = new THREE.AmbientLight(0x102820, 1.8);
-    this.scene.add(ambientLight);
+  // ================= MATERIAL DEFINITIONS =================
+  buildMaterialsLibrary() {
+    this.materials = {
+      // Concrete & Foundations
+      whiteConcrete: new THREE.MeshStandardMaterial({ color: 0xf1f5f9, roughness: 0.35, metalness: 0.1 }),
+      warmStone: new THREE.MeshStandardMaterial({ color: 0xe2e8f0, roughness: 0.45 }),
+      darkSlate: new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.5, metalness: 0.3 }),
+      redBrick: new THREE.MeshStandardMaterial({ color: 0x991b1b, roughness: 0.75, metalness: 0.05 }),
+      diuGreenTrim: new THREE.MeshStandardMaterial({ color: 0x059669, roughness: 0.3, metalness: 0.2 }),
+      diuEmeraldGlow: new THREE.MeshStandardMaterial({
+        color: 0x00f59b,
+        emissive: 0x00f59b,
+        emissiveIntensity: 0.4
+      }),
 
-    // Main directional sunlight with warm cyber accent
-    const dirLight = new THREE.DirectionalLight(0xa7f3d0, 1.4);
-    dirLight.position.set(200, 400, 200);
-    dirLight.castShadow = true;
-    dirLight.shadow.mapSize.width = 2048;
-    dirLight.shadow.mapSize.height = 2048;
-    dirLight.shadow.camera.near = 10;
-    dirLight.shadow.camera.far = 1000;
-    const d = 350;
-    dirLight.shadow.camera.left = -d;
-    dirLight.shadow.camera.right = d;
-    dirLight.shadow.camera.top = d;
-    dirLight.shadow.camera.bottom = -d;
-    this.scene.add(dirLight);
+      // Realistic Glass Windows
+      tintedGlass: new THREE.MeshPhysicalMaterial({
+        color: 0x0284c7,
+        metalness: 0.1,
+        roughness: 0.05,
+        transmission: 0.6,
+        transparent: true,
+        opacity: 0.75,
+        ior: 1.52
+      }),
+      emissiveWindowNight: new THREE.MeshBasicMaterial({ color: 0xfef08a }),
 
-    // Subtle blue secondary fill light
-    const fillLight = new THREE.DirectionalLight(0x0284c7, 0.8);
-    fillLight.position.set(-200, 250, -200);
-    this.scene.add(fillLight);
+      // Roof & Metals
+      roofGrey: new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.6, metalness: 0.4 }),
+      goldenDome: new THREE.MeshStandardMaterial({ color: 0xfacc15, metalness: 0.85, roughness: 0.18 }),
+      timberWood: new THREE.MeshStandardMaterial({ color: 0x78350f, roughness: 0.7 }),
 
-    // Central knowledge tower cyan uplight
-    const corePointLight = new THREE.PointLight(0x00f59b, 2.5, 300);
-    corePointLight.position.set(0, 40, 0);
-    this.scene.add(corePointLight);
+      // Roads & Ground
+      asphaltRoad: new THREE.MeshStandardMaterial({ color: 0x1e2422, roughness: 0.85 }),
+      runningTrack: new THREE.MeshStandardMaterial({ color: 0xbe123c, roughness: 0.8 }),
+      grassLawn: new THREE.MeshStandardMaterial({ color: 0x2e7d32, roughness: 0.9 }),
+      waterSurface: new THREE.MeshStandardMaterial({
+        color: 0x0284c7,
+        roughness: 0.08,
+        metalness: 0.8,
+        transparent: true,
+        opacity: 0.88
+      })
+    };
   }
 
-  createTerrainGrid() {
-    // Dark base ground
-    const groundGeo = new THREE.PlaneGeometry(1600, 1600);
-    const groundMat = new THREE.MeshStandardMaterial({
-      color: 0x090f0c,
-      roughness: 0.9,
-      metalness: 0.1
-    });
+  // ================= LIGHTING & DAY/NIGHT CONTROLLER =================
+  setupLighting() {
+    this.ambientLight = new THREE.AmbientLight(0xdbeafe, 1.4);
+    this.scene.add(this.ambientLight);
+
+    // Warm Sun Light
+    this.sunLight = new THREE.DirectionalLight(0xfffbeb, 1.8);
+    this.sunLight.position.set(300, 480, 240);
+    this.sunLight.castShadow = true;
+    this.sunLight.shadow.mapSize.width = 2048;
+    this.sunLight.shadow.mapSize.height = 2048;
+    this.sunLight.shadow.camera.near = 10;
+    this.sunLight.shadow.camera.far = 1400;
+    const d = 420;
+    this.sunLight.shadow.camera.left = -d;
+    this.sunLight.shadow.camera.right = d;
+    this.sunLight.shadow.camera.top = d;
+    this.sunLight.shadow.camera.bottom = -d;
+    this.scene.add(this.sunLight);
+
+    // Secondary Soft Sky Fill Light
+    this.fillLight = new THREE.DirectionalLight(0x93c5fd, 0.7);
+    this.fillLight.position.set(-250, 300, -200);
+    this.scene.add(this.fillLight);
+
+    // Knowledge Tower Core Beacon Light
+    this.towerLight = new THREE.PointLight(0x00f59b, 2.5, 250);
+    this.towerLight.position.set(0, 110, 0);
+    this.scene.add(this.towerLight);
+  }
+
+  setLightingMode(mode) {
+    this.lightingMode = mode;
+    if (mode === 'day') {
+      this.scene.background = new THREE.Color(0xd6eaf8);
+      this.scene.fog.color = new THREE.Color(0xd6eaf8);
+      this.ambientLight.color.setHex(0xdbeafe);
+      this.ambientLight.intensity = 1.4;
+      this.sunLight.intensity = 1.8;
+      this.sunLight.color.setHex(0xfffbeb);
+      this.fillLight.intensity = 0.7;
+      this.towerLight.intensity = 1.2;
+      this.nightLights.forEach(l => l.intensity = 0);
+    } else {
+      // Night Cyber Mode
+      this.scene.background = new THREE.Color(0x060b08);
+      this.scene.fog.color = new THREE.Color(0x060b08);
+      this.ambientLight.color.setHex(0x0f241a);
+      this.ambientLight.intensity = 0.6;
+      this.sunLight.intensity = 0.15;
+      this.sunLight.color.setHex(0x1e3a8a);
+      this.fillLight.intensity = 0.2;
+      this.towerLight.intensity = 4.0;
+      this.nightLights.forEach(l => l.intensity = 1.8);
+    }
+  }
+
+  // ================= TERRAIN & NATURAL LANDSCAPING =================
+  createRealisticTerrain() {
+    // Master Ground Base
+    const groundGeo = new THREE.PlaneGeometry(1800, 1800);
+    const groundMat = new THREE.MeshStandardMaterial({ color: 0x16231d, roughness: 0.95 });
     const ground = new THREE.Mesh(groundGeo, groundMat);
     ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
     this.scene.add(ground);
 
-    // Neon Cyber Grid
-    const grid = new THREE.GridHelper(1400, 70, 0x10b981, 0x132e24);
-    grid.position.y = 0.5;
-    this.scene.add(grid);
+    // DIU Lush Central Green Turf Plane
+    const campusPlazaGeo = new THREE.PlaneGeometry(480, 420);
+    const campusPlaza = new THREE.Mesh(campusPlazaGeo, this.materials.grassLawn);
+    campusPlaza.rotation.x = -Math.PI / 2;
+    campusPlaza.position.set(40, 0.2, 40);
+    campusPlaza.receiveShadow = true;
+    this.scene.add(campusPlaza);
 
-    // Green campus boundary perimeter glow
-    const campusBoundsGeo = new THREE.RingGeometry(180, 185, 64);
-    const campusBoundsMat = new THREE.MeshBasicMaterial({
-      color: 0x10b981,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.25
-    });
-    const campusRing = new THREE.Mesh(campusBoundsGeo, campusBoundsMat);
-    campusRing.rotation.x = -Math.PI / 2;
-    campusRing.position.set(30, 0.6, 20);
-    this.scene.add(campusRing);
+    // Perimeter boundary curb stone ring around Daffodil Smart City core
+    const curbGeo = new THREE.RingGeometry(240, 244, 64);
+    const curbMat = new THREE.MeshStandardMaterial({ color: 0x334155, side: THREE.DoubleSide });
+    const curb = new THREE.Mesh(curbGeo, curbMat);
+    curb.rotation.x = -Math.PI / 2;
+    curb.position.set(40, 0.3, 40);
+    this.scene.add(curb);
   }
 
+  // ================= ROADS WITH REALISTIC LANE MARKINGS =================
   createRoadNetwork() {
-    // Render graph edges as glowing roads in 3D
     CAMPUS_EDGES.forEach(edge => {
       const fromNode = CAMPUS_NODES.find(n => n.id === edge.from);
       const toNode = CAMPUS_NODES.find(n => n.id === edge.to);
@@ -172,223 +254,704 @@ class Campus3DViewer {
       const p1 = this.geoTo3D(fromNode.lat, fromNode.lng);
       const p2 = this.geoTo3D(toNode.lat, toNode.lng);
 
-      const points = [
-        new THREE.Vector3(p1.x, 1, p1.z),
-        new THREE.Vector3(p2.x, 1, p2.z)
-      ];
-      const roadGeo = new THREE.BufferGeometry().setFromPoints(points);
+      const dx = p2.x - p1.x;
+      const dz = p2.z - p1.z;
+      const length = Math.sqrt(dx * dx + dz * dz);
+      const angle = Math.atan2(dx, dz);
+      const midX = (p1.x + p2.x) / 2;
+      const midZ = (p1.z + p2.z) / 2;
 
-      let roadColor = 0x10b981; // default green walkway
-      let opacity = 0.4;
-      if (edge.type === 'paved_road') {
-        roadColor = 0x38bdf8; // cyan paved road
-        opacity = 0.65;
-      } else if (edge.type === 'shortcut_alley') {
-        roadColor = 0xf59e0b; // amber shortcut
-        opacity = 0.5;
+      const roadWidth = edge.type === 'paved_road' ? 12 : 5;
+      const roadGeo = new THREE.PlaneGeometry(roadWidth, length);
+      const roadMat = edge.type === 'paved_road' 
+        ? this.materials.asphaltRoad 
+        : new THREE.MeshStandardMaterial({ color: 0x27272a, roughness: 0.8 });
+
+      const roadMesh = new THREE.Mesh(roadGeo, roadMat);
+      roadMesh.rotation.x = -Math.PI / 2;
+      roadMesh.rotation.z = -angle;
+      roadMesh.position.set(midX, 0.4, midZ);
+      roadMesh.receiveShadow = true;
+      this.scene.add(roadMesh);
+
+      // Add center dashed white line for paved main roads
+      if (edge.type === 'paved_road' && length > 30) {
+        const stripeGeo = new THREE.PlaneGeometry(0.8, length * 0.9);
+        const stripeMat = new THREE.MeshBasicMaterial({ color: 0xf8fafc, transparent: true, opacity: 0.6 });
+        const stripe = new THREE.Mesh(stripeGeo, stripeMat);
+        stripe.rotation.x = -Math.PI / 2;
+        stripe.rotation.z = -angle;
+        stripe.position.set(midX, 0.45, midZ);
+        this.scene.add(stripe);
       }
-
-      const roadMat = new THREE.LineBasicMaterial({
-        color: roadColor,
-        transparent: true,
-        opacity: opacity,
-        linewidth: edge.type === 'paved_road' ? 2 : 1
-      });
-
-      const line = new THREE.Line(roadGeo, roadMat);
-      this.scene.add(line);
     });
   }
 
-  // ================= 3D ARCHITECTURAL GENERATION =================
+  // ================= ARCHITECTURAL LANDMARKS =================
   buildCampusLandmarks() {
-    // 1. Knowledge Tower (Admin Skyscraper)
+    // 1. Knowledge Tower (AB-4: 14-Story Flagship Skyscraper)
     const ktPos = this.geoTo3D(23.8778, 90.3206);
-    const ktGroup = this.createSkyscraper(ktPos.x, ktPos.z, {
-      id: "knowledge_tower",
-      title: "Knowledge Tower (Admin)",
-      floors: 14,
-      width: 28,
-      height: 95,
-      depth: 24,
-      primaryColor: 0x064e3b,
-      glassColor: 0x0284c7,
-      hasBeacon: true
-    });
-    this.scene.add(ktGroup);
+    this.createRealisticKnowledgeTower(ktPos.x, ktPos.z);
 
-    // 2. Academic Building 1 (AB-1, CSE & Software)
+    // 2. Academic Building 1 (AB-1: CSE & Software Engineering)
     const ab1Pos = this.geoTo3D(23.8787, 90.3213);
-    const ab1Group = this.createTechBuilding(ab1Pos.x, ab1Pos.z, {
-      id: "ab1_building",
-      title: "Academic Building 1 (CSE/SWE)",
-      width: 38,
-      height: 58,
-      depth: 26,
-      primaryColor: 0x0f291e,
-      accentColor: 0x10b981,
-      roofText: "AB-1 CSE"
-    });
-    this.scene.add(ab1Group);
+    this.createRealisticAB1(ab1Pos.x, ab1Pos.z);
 
-    // 3. Academic Building 2 (AB-2, EEE & Textile)
+    // 3. Academic Building 2 & 3 (AB-2 & AB-3 with Skybridge)
     const ab2Pos = this.geoTo3D(23.8794, 90.3221);
-    const ab2Group = this.createTechBuilding(ab2Pos.x, ab2Pos.z, {
-      id: "ab2_building",
-      title: "Academic Building 2 (EEE/Civil)",
-      width: 34,
-      height: 52,
-      depth: 28,
-      primaryColor: 0x1e293b,
-      accentColor: 0x38bdf8,
-      roofText: "AB-2 EEE"
-    });
-    this.scene.add(ab2Group);
-
-    // 4. Academic Building 3 (AB-3, BBA & Law)
     const ab3Pos = this.geoTo3D(23.8802, 90.3229);
-    const ab3Group = this.createTechBuilding(ab3Pos.x, ab3Pos.z, {
-      id: "ab3_building",
-      title: "Academic Building 3 (BBA/Law)",
-      width: 32,
-      height: 48,
-      depth: 25,
-      primaryColor: 0x1a2e22,
-      accentColor: 0xa855f7,
-      roofText: "AB-3"
-    });
-    this.scene.add(ab3Group);
+    this.createRealisticAB2AndAB3(ab2Pos, ab3Pos);
 
-    // 5. Central Library & Innovation Hub
+    // 4. DIU Central Library & Innovation Lab
     const libPos = this.geoTo3D(23.8781, 90.3219);
-    const libGroup = this.createGlassLibrary(libPos.x, libPos.z, {
-      id: "central_library",
-      title: "DIU Central Library",
-      width: 32,
-      height: 38,
-      depth: 32
-    });
-    this.scene.add(libGroup);
+    this.createRealisticLibrary(libPos.x, libPos.z);
 
-    // 6. Central Cafeteria (Charulata Food Court)
+    // 5. Central Cafeteria (Charulata Food Court)
     const cafePos = this.geoTo3D(23.8773, 90.3224);
-    const cafeGroup = this.createCafeteria(cafePos.x, cafePos.z, {
-      id: "central_cafeteria",
-      title: "Central Cafeteria (Charulata)"
-    });
-    this.scene.add(cafeGroup);
+    this.createRealisticCafeteria(cafePos.x, cafePos.z);
 
-    // 7. Central Mosque
+    // 6. DIU Central Mosque
     const mosquePos = this.geoTo3D(23.8761, 90.3217);
-    const mosqueGroup = this.createMosque(mosquePos.x, mosquePos.z, {
-      id: "central_mosque",
-      title: "DIU Central Mosque"
-    });
-    this.scene.add(mosqueGroup);
+    this.createRealisticMosque(mosquePos.x, mosquePos.z);
 
-    // 8. DIU Lake & Eco Walkway
+    // 7. DIU Lake & Iconic Wooden Bridge
     const lakePos = this.geoTo3D(23.8765, 90.3236);
-    const lakeGroup = this.createWaterLake(lakePos.x, lakePos.z, {
-      id: "diu_lake",
-      title: "DIU Lake & Eco Walkway"
-    });
-    this.scene.add(lakeGroup);
+    this.createRealisticLakeAndBridge(lakePos.x, lakePos.z);
 
-    // 9. DIU Sports Arena (Cricket/Football Ground)
+    // 8. DIU Sports Arena (With 400m Running Track)
     const sportsPos = this.geoTo3D(23.8752, 90.3225);
-    const sportsGroup = this.createSportsGround(sportsPos.x, sportsPos.z, {
-      id: "sports_ground",
-      title: "DIU Sports Arena"
-    });
-    this.scene.add(sportsGroup);
+    this.createRealisticSportsArena(sportsPos.x, sportsPos.z);
 
-    // 10. DIU Main Entrance Gate
+    // 9. DIU Main Entrance Gate & Checkpost
     const gatePos = this.geoTo3D(23.8766, 90.3201);
-    const gateGroup = this.createEntranceGate(gatePos.x, gatePos.z, {
-      id: "diu_main_gate",
-      title: "DIU Main Entrance Gate"
-    });
-    this.scene.add(gateGroup);
+    this.createRealisticMainGate(gatePos.x, gatePos.z);
 
-    // 11. Campus Bus Terminal
+    // 10. Campus Bus Terminal
     const termPos = this.geoTo3D(23.8758, 90.3192);
-    const termGroup = this.createTransportTerminal(termPos.x, termPos.z, {
-      id: "transport_terminal",
-      title: "Campus Bus Terminal"
-    });
-    this.scene.add(termGroup);
+    this.createRealisticBusTerminal(termPos.x, termPos.z);
 
-    // 12. DIU Medical Center
+    // 11. DIU Medical Center
     const medPos = this.geoTo3D(23.8770, 90.3204);
-    const medGroup = this.createMedicalCenter(medPos.x, medPos.z, {
-      id: "diu_medical",
-      title: "DIU Medical Center"
-    });
-    this.scene.add(medGroup);
+    this.createRealisticMedicalCenter(medPos.x, medPos.z);
   }
 
+  // ---------- 1. KNOWLEDGE TOWER (AB-4) ----------
+  createRealisticKnowledgeTower(x, z) {
+    const group = new THREE.Group();
+    group.position.set(x, 0, z);
+
+    const towerHeight = 110;
+    const towerWidth = 32;
+    const towerDepth = 26;
+
+    // Ground Entrance Plaza Podium
+    const podiumGeo = new THREE.BoxGeometry(towerWidth + 14, 4, towerDepth + 14);
+    const podium = new THREE.Mesh(podiumGeo, this.materials.whiteConcrete);
+    podium.position.y = 2;
+    podium.receiveShadow = true;
+    group.add(podium);
+
+    // Glass Main Body (14 Floors represented with floor slabs)
+    const bodyGeo = new THREE.BoxGeometry(towerWidth, towerHeight, towerDepth);
+    const bodyMesh = new THREE.Mesh(bodyGeo, this.materials.tintedGlass);
+    bodyMesh.position.y = towerHeight / 2 + 4;
+    bodyMesh.castShadow = true;
+    group.add(bodyMesh);
+
+    // Horizontal concrete floor slabs (14 levels)
+    const floorsCount = 14;
+    for (let f = 1; f <= floorsCount; f++) {
+      const slabY = 4 + (f * (towerHeight / floorsCount));
+      const slabGeo = new THREE.BoxGeometry(towerWidth + 0.8, 0.9, towerDepth + 0.8);
+      const slab = new THREE.Mesh(slabGeo, this.materials.whiteConcrete);
+      slab.position.y = slabY;
+      group.add(slab);
+    }
+
+    // Vertical structural columns & DIU Green accent ribs
+    [-towerWidth / 2 - 0.4, towerWidth / 2 + 0.4].forEach(px => {
+      const ribGeo = new THREE.BoxGeometry(1.6, towerHeight, 3);
+      const rib = new THREE.Mesh(ribGeo, this.materials.diuGreenTrim);
+      rib.position.set(px, towerHeight / 2 + 4, 0);
+      group.add(rib);
+    });
+
+    // Grand Entrance Cantilevered Glass Canopy
+    const canopyGeo = new THREE.BoxGeometry(18, 1, 14);
+    const canopy = new THREE.Mesh(canopyGeo, this.materials.tintedGlass);
+    canopy.position.set(0, 8, towerDepth / 2 + 6);
+    group.add(canopy);
+
+    // Rooftop Communications Crown & Elevator Penthouse
+    const roofTopGeo = new THREE.BoxGeometry(towerWidth * 0.7, 16, towerDepth * 0.7);
+    const roofTop = new THREE.Mesh(roofTopGeo, this.materials.darkSlate);
+    roofTop.position.y = towerHeight + 12;
+    group.add(roofTop);
+
+    // Satellite Dish on Roof
+    const dishGeo = new THREE.SphereGeometry(3.5, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2.5);
+    const dish = new THREE.Mesh(dishGeo, this.materials.whiteConcrete);
+    dish.rotation.x = -Math.PI / 3;
+    dish.position.set(6, towerHeight + 22, -4);
+    group.add(dish);
+
+    // Spire & Rotating Laser Sky-Beacon
+    const spireGeo = new THREE.ConeGeometry(1.5, 24, 8);
+    const spire = new THREE.Mesh(spireGeo, this.materials.diuEmeraldGlow);
+    spire.position.y = towerHeight + 28;
+    group.add(spire);
+
+    const beamGeo = new THREE.CylinderGeometry(0.6, 16, 220, 16);
+    const beamMat = new THREE.MeshBasicMaterial({
+      color: 0x00f59b,
+      transparent: true,
+      opacity: 0.35,
+      side: THREE.DoubleSide
+    });
+    const beam = new THREE.Mesh(beamGeo, beamMat);
+    beam.position.y = towerHeight + 130;
+    group.add(beam);
+    group.userData.beaconBeam = beam;
+
+    this.attachNodeInteraction(bodyMesh, "knowledge_tower", "Knowledge Tower (Admin / AB-4)");
+    this.createFloatingPin(group, towerHeight + 45, 0x00f59b, "Knowledge Tower (Admin)");
+
+    this.buildingMeshes.set("knowledge_tower", group);
+    this.scene.add(group);
+  }
+
+  // ---------- 2. ACADEMIC BUILDING 1 (AB-1) ----------
+  createRealisticAB1(x, z) {
+    const group = new THREE.Group();
+    group.position.set(x, 0, z);
+
+    const bHeight = 64;
+
+    // Left Wing (CSE Laboratories)
+    const leftWingGeo = new THREE.BoxGeometry(16, bHeight, 46);
+    const leftWing = new THREE.Mesh(leftWingGeo, this.materials.redBrick);
+    leftWing.position.set(-16, bHeight / 2, 0);
+    leftWing.castShadow = true;
+    group.add(leftWing);
+
+    // Right Wing (Software Engineering Suites)
+    const rightWingGeo = new THREE.BoxGeometry(16, bHeight, 46);
+    const rightWing = new THREE.Mesh(rightWingGeo, this.materials.redBrick);
+    rightWing.position.set(16, bHeight / 2, 0);
+    rightWing.castShadow = true;
+    group.add(rightWing);
+
+    // Central Connecting Glass Atrium
+    const atriumGeo = new THREE.BoxGeometry(18, bHeight - 6, 24);
+    const atrium = new THREE.Mesh(atriumGeo, this.materials.tintedGlass);
+    atrium.position.set(0, (bHeight - 6) / 2, -10);
+    group.add(atrium);
+
+    // Horizontal window bands across both wings
+    for (let f = 1; f <= 6; f++) {
+      const wy = f * 9.5;
+      [-16, 16].forEach(wx => {
+        const winBand = new THREE.Mesh(new THREE.BoxGeometry(16.4, 3, 44), this.materials.tintedGlass);
+        winBand.position.set(wx, wy, 0);
+        group.add(winBand);
+      });
+    }
+
+    // Landscaped Inner Courtyard with central tree
+    const court = new THREE.Mesh(new THREE.PlaneGeometry(16, 22), this.materials.grassLawn);
+    court.rotation.x = -Math.PI / 2;
+    court.position.set(0, 0.3, 10);
+    group.add(court);
+    group.add(this.createTree(0, 10));
+
+    // Rooftop Solar Panel Arrays
+    for (let s = 0; s < 3; s++) {
+      const panel = new THREE.Mesh(new THREE.BoxGeometry(10, 0.4, 8), this.materials.darkSlate);
+      panel.rotation.x = -0.2;
+      panel.position.set(-16, bHeight + 1.5, -12 + (s * 12));
+      group.add(panel);
+    }
+
+    this.attachNodeInteraction(leftWing, "ab1_building", "Academic Building 1 (CSE / SWE)");
+    this.createFloatingPin(group, bHeight + 16, 0x10b981, "AB-1 (CSE / Software)");
+
+    this.buildingMeshes.set("ab1_building", group);
+    this.scene.add(group);
+  }
+
+  // ---------- 3. ACADEMIC BUILDING 2 & 3 (WITH SKYBRIDGE) ----------
+  createRealisticAB2AndAB3(ab2Pos, ab3Pos) {
+    // AB-2 (EEE, Civil & Textile)
+    const group2 = new THREE.Group();
+    group2.position.set(ab2Pos.x, 0, ab2Pos.z);
+    const b2Mesh = new THREE.Mesh(new THREE.BoxGeometry(36, 56, 30), this.materials.whiteConcrete);
+    b2Mesh.position.y = 28;
+    b2Mesh.castShadow = true;
+    group2.add(b2Mesh);
+
+    // Glass window ribbons on AB-2
+    for (let f = 1; f <= 5; f++) {
+      const win = new THREE.Mesh(new THREE.BoxGeometry(36.4, 3.5, 26), this.materials.tintedGlass);
+      win.position.set(0, f * 9.5, 0);
+      group2.add(win);
+    }
+    this.attachNodeInteraction(b2Mesh, "ab2_building", "Academic Building 2 (EEE/Civil)");
+    this.createFloatingPin(group2, 70, 0x38bdf8, "AB-2 (EEE / Civil)");
+    this.buildingMeshes.set("ab2_building", group2);
+    this.scene.add(group2);
+
+    // AB-3 (BBA & Law)
+    const group3 = new THREE.Group();
+    group3.position.set(ab3Pos.x, 0, ab3Pos.z);
+    const b3Mesh = new THREE.Mesh(new THREE.BoxGeometry(34, 50, 28), this.materials.darkSlate);
+    b3Mesh.position.y = 25;
+    b3Mesh.castShadow = true;
+    group3.add(b3Mesh);
+
+    for (let f = 1; f <= 5; f++) {
+      const win = new THREE.Mesh(new THREE.BoxGeometry(34.4, 3, 24), this.materials.tintedGlass);
+      win.position.set(0, f * 8.5, 0);
+      group3.add(win);
+    }
+    this.attachNodeInteraction(b3Mesh, "ab3_building", "Academic Building 3 (BBA/Law)");
+    this.createFloatingPin(group3, 65, 0xa855f7, "AB-3 (BBA / Law)");
+    this.buildingMeshes.set("ab3_building", group3);
+    this.scene.add(group3);
+
+    // Elevated Connecting Glass Skybridge between AB-2 and AB-3
+    const bridgeX = (ab2Pos.x + ab3Pos.x) / 2;
+    const bridgeZ = (ab2Pos.z + ab3Pos.z) / 2;
+    const bridgeGroup = new THREE.Group();
+    bridgeGroup.position.set(bridgeX, 28, bridgeZ);
+
+    const dx = ab3Pos.x - ab2Pos.x;
+    const dz = ab3Pos.z - ab2Pos.z;
+    const bridgeDist = Math.sqrt(dx * dx + dz * dz);
+    const bridgeAngle = Math.atan2(dx, dz);
+
+    const bridgeSpan = new THREE.Mesh(new THREE.BoxGeometry(6, 6, bridgeDist - 28), this.materials.tintedGlass);
+    bridgeSpan.rotation.y = bridgeAngle;
+    bridgeGroup.add(bridgeSpan);
+    this.scene.add(bridgeGroup);
+  }
+
+  // ---------- 4. DIU CENTRAL LIBRARY ----------
+  createRealisticLibrary(x, z) {
+    const group = new THREE.Group();
+    group.position.set(x, 0, z);
+
+    const h = 40;
+    const libCube = new THREE.Mesh(new THREE.BoxGeometry(34, h, 34), this.materials.tintedGlass);
+    libCube.position.y = h / 2;
+    libCube.castShadow = true;
+    group.add(libCube);
+
+    // Structural perimeter white columns
+    [-17, 17].forEach(cx => {
+      [-17, 17].forEach(cz => {
+        const col = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.2, h, 8), this.materials.whiteConcrete);
+        col.position.set(cx, h / 2, cz);
+        group.add(col);
+      });
+    });
+
+    // Rooftop Open Book Architectural Feature
+    const bookBase = new THREE.Mesh(new THREE.BoxGeometry(18, 3, 14), this.materials.goldenDome);
+    bookBase.position.y = h + 2;
+    group.add(bookBase);
+
+    this.attachNodeInteraction(libCube, "central_library", "DIU Central Library & Innovation Lab");
+    this.createFloatingPin(group, h + 18, 0x38bdf8, "Central Library");
+    this.buildingMeshes.set("central_library", group);
+    this.scene.add(group);
+  }
+
+  // ---------- 5. CENTRAL CAFETERIA (CHARULATA FOOD COURT) ----------
+  createRealisticCafeteria(x, z) {
+    const group = new THREE.Group();
+    group.position.set(x, 0, z);
+
+    // Raised Outdoor Timber Decking
+    const deck = new THREE.Mesh(new THREE.CylinderGeometry(26, 28, 2.5, 24), this.materials.timberWood);
+    deck.position.y = 1.2;
+    group.add(deck);
+
+    // Open-Air Pavilion Roof
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(24, 14, 16), this.materials.goldenDome);
+    roof.position.y = 16;
+    roof.castShadow = true;
+    group.add(roof);
+
+    // Circular steel support pillars
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2;
+      const px = Math.cos(a) * 18;
+      const pz = Math.sin(a) * 18;
+      const pil = new THREE.Mesh(new THREE.CylinderGeometry(0.6, 0.6, 12, 8), this.materials.whiteConcrete);
+      pil.position.set(px, 7.5, pz);
+      group.add(pil);
+    }
+
+    // Outdoor Dining Tables & Parasols
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2;
+      const tx = Math.cos(a) * 22;
+      const tz = Math.sin(a) * 22;
+
+      const tbl = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 1.4, 8), this.materials.whiteConcrete);
+      tbl.position.set(tx, 2.4, tz);
+      group.add(tbl);
+
+      const umb = new THREE.Mesh(new THREE.ConeGeometry(3.5, 1.8, 8), new THREE.MeshStandardMaterial({ color: 0xef4444 }));
+      umb.position.set(tx, 5.2, tz);
+      group.add(umb);
+    }
+
+    this.attachNodeInteraction(deck, "central_cafeteria", "Central Cafeteria (Charulata Food Court)");
+    this.createFloatingPin(group, 26, 0xf59e0b, "Charulata Cafeteria");
+    this.buildingMeshes.set("central_cafeteria", group);
+    this.scene.add(group);
+  }
+
+  // ---------- 6. DIU CENTRAL MOSQUE ----------
+  createRealisticMosque(x, z) {
+    const group = new THREE.Group();
+    group.position.set(x, 0, z);
+
+    // Raised White Marble Plinth
+    const plinth = new THREE.Mesh(new THREE.BoxGeometry(36, 3, 36), this.materials.whiteConcrete);
+    plinth.position.y = 1.5;
+    group.add(plinth);
+
+    // Main Cube Prayer Hall
+    const hall = new THREE.Mesh(new THREE.BoxGeometry(28, 18, 28), this.materials.whiteConcrete);
+    hall.position.y = 11;
+    hall.castShadow = true;
+    group.add(hall);
+
+    // Arched Iwan Entrance Portal
+    const portal = new THREE.Mesh(new THREE.BoxGeometry(10, 14, 4), this.materials.diuGreenTrim);
+    portal.position.set(0, 9, 14.5);
+    group.add(portal);
+
+    // Central Ribbed Golden Dome
+    const dome = new THREE.Mesh(
+      new THREE.SphereGeometry(10, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2),
+      this.materials.goldenDome
+    );
+    dome.position.y = 20;
+    group.add(dome);
+
+    // Crescent Finial on Dome
+    const crescent = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.3, 8, 16, Math.PI * 1.5), this.materials.goldenDome);
+    crescent.position.set(0, 31, 0);
+    group.add(crescent);
+
+    // Authentic Tall Minaret (40m height) on Northeast Corner
+    const minaret = new THREE.Mesh(new THREE.CylinderGeometry(2, 2.8, 52, 12), this.materials.whiteConcrete);
+    minaret.position.set(15, 26, 15);
+    minaret.castShadow = true;
+    group.add(minaret);
+
+    // Minaret Balconies (Sherefe)
+    [32, 44].forEach(by => {
+      const balc = new THREE.Mesh(new THREE.CylinderGeometry(3.2, 2.5, 2, 12), this.materials.diuGreenTrim);
+      balc.position.set(15, by, 15);
+      group.add(balc);
+    });
+
+    // Minaret Emerald Conical Spire
+    const spire = new THREE.Mesh(new THREE.ConeGeometry(2.4, 9, 12), this.materials.diuEmeraldGlow);
+    spire.position.set(15, 56, 15);
+    group.add(spire);
+
+    this.attachNodeInteraction(hall, "central_mosque", "DIU Central Mosque");
+    this.createFloatingPin(group, 36, 0x10b981, "DIU Central Mosque");
+    this.buildingMeshes.set("central_mosque", group);
+    this.scene.add(group);
+  }
+
+  // ---------- 7. DIU LAKE & ICONIC WOODEN BRIDGE ----------
+  createRealisticLakeAndBridge(x, z) {
+    const group = new THREE.Group();
+    group.position.set(x, 0, z);
+
+    // Realistic Organic Shimmering Water Lake
+    const lakeGeo = new THREE.PlaneGeometry(85, 52, 24, 24);
+    const lake = new THREE.Mesh(lakeGeo, this.materials.waterSurface);
+    lake.rotation.x = -Math.PI / 2;
+    lake.position.y = 0.6;
+    lake.receiveShadow = true;
+    group.add(lake);
+    group.userData.water = lake;
+
+    // Stone / Sandy Shoreline Trim
+    const shoreGeo = new THREE.RingGeometry(34, 37, 32);
+    const shoreMat = new THREE.MeshStandardMaterial({ color: 0x475569, side: THREE.DoubleSide });
+    const shore = new THREE.Mesh(shoreGeo, shoreMat);
+    shore.rotation.x = -Math.PI / 2;
+    shore.position.y = 0.65;
+    group.add(shore);
+
+    // ICONIC ARCHED WOODEN PEDESTRIAN BRIDGE (Spanning across the lake)
+    const bridgeSpan = new THREE.Group();
+    const archCurve = new THREE.QuadraticBezierCurve3(
+      new THREE.Vector3(-24, 0.8, 0),
+      new THREE.Vector3(0, 7.5, 0),
+      new THREE.Vector3(24, 0.8, 0)
+    );
+    const bridgePoints = archCurve.getPoints(24);
+    const deckGeo = new THREE.TubeGeometry(archCurve, 24, 2.2, 4, false);
+    const deckMesh = new THREE.Mesh(deckGeo, this.materials.timberWood);
+    deckMesh.scale.set(1, 0.25, 2.2);
+    bridgeSpan.add(deckMesh);
+
+    // Timber Handrails with glowing lantern posts
+    [-2.2, 2.2].forEach(rz => {
+      const railCurve = new THREE.QuadraticBezierCurve3(
+        new THREE.Vector3(-24, 3.2, rz),
+        new THREE.Vector3(0, 9.8, rz),
+        new THREE.Vector3(24, 3.2, rz)
+      );
+      const railMesh = new THREE.Mesh(new THREE.TubeGeometry(railCurve, 24, 0.25, 6, false), this.materials.timberWood);
+      bridgeSpan.add(railMesh);
+    });
+    group.add(bridgeSpan);
+
+    // Lakeside Gazebo ("Chatro Chhaya") on the bank
+    const gazebo = new THREE.Mesh(new THREE.ConeGeometry(6, 4, 6), this.materials.timberWood);
+    gazebo.position.set(-36, 5, 18);
+    group.add(gazebo);
+
+    // 2 Miniature Paddle Boats on the lake
+    [-12, 14].forEach((bx, idx) => {
+      const boat = new THREE.Mesh(new THREE.BoxGeometry(4.5, 1.2, 2.4), this.materials.whiteConcrete);
+      boat.position.set(bx, 0.9, idx === 0 ? 8 : -10);
+      boat.rotation.y = idx * 0.8;
+      group.add(boat);
+    });
+
+    // Weeping willow trees along the water bank
+    for (let i = 0; i < 7; i++) {
+      const a = (i / 7) * Math.PI * 2;
+      const tx = Math.cos(a) * 44;
+      const tz = Math.sin(a) * 26;
+      group.add(this.createTree(tx, tz));
+    }
+
+    this.attachNodeInteraction(lake, "diu_lake", "DIU Lake & Eco Walkway");
+    this.createFloatingPin(group, 18, 0x06b6d4, "DIU Lake & Bridge");
+    this.buildingMeshes.set("diu_lake", group);
+    this.scene.add(group);
+  }
+
+  // ---------- 8. DIU SPORTS ARENA & RUNNING TRACK ----------
+  createRealisticSportsArena(x, z) {
+    const group = new THREE.Group();
+    group.position.set(x, 0, z);
+
+    // 400m Terracotta Red Athletics Running Track (Outer Ring)
+    const trackGeo = new THREE.PlaneGeometry(94, 64);
+    const track = new THREE.Mesh(trackGeo, this.materials.runningTrack);
+    track.rotation.x = -Math.PI / 2;
+    track.position.y = 0.5;
+    track.receiveShadow = true;
+    group.add(track);
+
+    // Central Green Turf Pitch
+    const fieldGeo = new THREE.PlaneGeometry(80, 50);
+    const field = new THREE.Mesh(fieldGeo, this.materials.grassLawn);
+    field.rotation.x = -Math.PI / 2;
+    field.position.y = 0.6;
+    field.receiveShadow = true;
+    group.add(field);
+
+    // Cricket Pitch Strip
+    const pitch = new THREE.Mesh(new THREE.PlaneGeometry(18, 4), new THREE.MeshBasicMaterial({ color: 0xd97706 }));
+    pitch.rotation.x = -Math.PI / 2;
+    pitch.position.y = 0.65;
+    group.add(pitch);
+
+    // Covered Spectator Grandstand Gallery (South Side)
+    const stand = new THREE.Mesh(new THREE.BoxGeometry(50, 8, 8), this.materials.whiteConcrete);
+    stand.position.set(0, 4, 32);
+    group.add(stand);
+
+    // 4 Heavy-duty Stadium Floodlight Masts
+    const corners = [[-44, -28], [44, -28], [-44, 28], [44, 28]];
+    corners.forEach(([cx, cz]) => {
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.2, 34, 6), this.materials.whiteConcrete);
+      mast.position.set(cx, 17, cz);
+      group.add(mast);
+
+      // Halogen Light Bar Head
+      const head = new THREE.Mesh(new THREE.BoxGeometry(6, 2, 2.5), new THREE.MeshBasicMaterial({ color: 0xfef08a }));
+      head.position.set(cx, 34, cz);
+      group.add(head);
+
+      // Stadium Night Spot Light
+      const spot = new THREE.PointLight(0xfef08a, 0, 120);
+      spot.position.set(cx, 33, cz);
+      group.add(spot);
+      this.nightLights.push(spot);
+    });
+
+    this.attachNodeInteraction(field, "sports_ground", "DIU Sports Arena & Stadium");
+    this.createFloatingPin(group, 24, 0x22c55e, "DIU Sports Arena");
+    this.buildingMeshes.set("sports_ground", group);
+    this.scene.add(group);
+  }
+
+  // ---------- 9. MAIN GATE ----------
+  createRealisticMainGate(x, z) {
+    const group = new THREE.Group();
+    group.position.set(x, 0, z);
+
+    // Modern Archway Structure
+    const pillar1 = new THREE.Mesh(new THREE.BoxGeometry(5, 20, 5), this.materials.diuGreenTrim);
+    pillar1.position.set(-14, 10, 0);
+    group.add(pillar1);
+
+    const pillar2 = new THREE.Mesh(new THREE.BoxGeometry(5, 20, 5), this.materials.diuGreenTrim);
+    pillar2.position.set(14, 10, 0);
+    group.add(pillar2);
+
+    const archBeam = new THREE.Mesh(new THREE.BoxGeometry(33, 4.5, 6), this.materials.whiteConcrete);
+    archBeam.position.set(0, 20, 0);
+    group.add(archBeam);
+
+    // Security Checkpost Booth
+    const booth = new THREE.Mesh(new THREE.BoxGeometry(6, 6, 6), this.materials.darkSlate);
+    booth.position.set(0, 3, 0);
+    group.add(booth);
+
+    this.attachNodeInteraction(archBeam, "diu_main_gate", "DIU Main Entrance Gate");
+    this.createFloatingPin(group, 26, 0x10b981, "Main Entrance Gate");
+    this.buildingMeshes.set("diu_main_gate", group);
+    this.scene.add(group);
+  }
+
+  // ---------- 10. BUS TERMINAL ----------
+  createRealisticBusTerminal(x, z) {
+    const group = new THREE.Group();
+    group.position.set(x, 0, z);
+
+    const lot = new THREE.Mesh(new THREE.PlaneGeometry(50, 34), this.materials.asphaltRoad);
+    lot.rotation.x = -Math.PI / 2;
+    lot.position.y = 0.5;
+    group.add(lot);
+
+    // 3 DIU University Student Shuttle Buses
+    [-10, 0, 10].forEach(bz => {
+      const bus = new THREE.Mesh(new THREE.BoxGeometry(18, 7, 7.5), this.materials.diuGreenTrim);
+      bus.position.set(0, 4, bz);
+      bus.castShadow = true;
+      group.add(bus);
+
+      // White roof
+      const roof = new THREE.Mesh(new THREE.BoxGeometry(18, 0.8, 7.5), this.materials.whiteConcrete);
+      roof.position.set(0, 7.6, bz);
+      group.add(roof);
+
+      // Windows
+      const win = new THREE.Mesh(new THREE.BoxGeometry(16, 2.2, 7.7), this.materials.tintedGlass);
+      win.position.set(0, 5, bz);
+      group.add(win);
+    });
+
+    this.attachNodeInteraction(lot, "transport_terminal", "DIU Campus Bus Terminal");
+    this.createFloatingPin(group, 18, 0x059669, "Campus Bus Terminal");
+    this.buildingMeshes.set("transport_terminal", group);
+    this.scene.add(group);
+  }
+
+  // ---------- 11. MEDICAL CENTER ----------
+  createRealisticMedicalCenter(x, z) {
+    const group = new THREE.Group();
+    group.position.set(x, 0, z);
+
+    const b = new THREE.Mesh(new THREE.BoxGeometry(24, 15, 20), this.materials.whiteConcrete);
+    b.position.y = 7.5;
+    b.castShadow = true;
+    group.add(b);
+
+    // Red Cross Emblem
+    const cross1 = new THREE.Mesh(new THREE.BoxGeometry(7, 2, 2), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
+    cross1.position.set(0, 16.5, 0);
+    group.add(cross1);
+    const cross2 = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 7), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
+    cross2.position.set(0, 16.5, 0);
+    group.add(cross2);
+
+    this.attachNodeInteraction(b, "diu_medical", "DIU Medical Center & Pharmacy");
+    this.createFloatingPin(group, 23, 0xef4444, "Medical Center");
+    this.buildingMeshes.set("diu_medical", group);
+    this.scene.add(group);
+  }
+
+  // ================= SURROUNDING STUDENT MESS HUBS =================
   buildSurroundingHubs() {
-    // 13. Dattapara Student Hub & Market
+    // Khagan Bazar & Mess Lane
+    const kBaz = this.geoTo3D(23.8828, 90.3138);
+    this.createMessVillage(kBaz.x, kBaz.z, {
+      id: "khagan_bazar",
+      title: "Khagan Bazar & Bus Stand",
+      color: 0xf97316,
+      count: 6,
+      height: 28,
+      hasShops: true
+    });
+
+    const kMess = this.geoTo3D(23.8839, 90.3129);
+    this.createMessVillage(kMess.x, kMess.z, {
+      id: "khagan_student_mess",
+      title: "Khagan Student Mess Lane",
+      color: 0xa855f7,
+      count: 7,
+      height: 38,
+      hasWaterTanks: true
+    });
+
+    // Dattapara Student Hub & Messes
     const dJunc = this.geoTo3D(23.8795, 90.3162);
-    this.createStudentVillage(dJunc.x, dJunc.z, {
+    this.createMessVillage(dJunc.x, dJunc.z, {
       id: "dattapara_junction",
       title: "Dattapara Student Hub",
       color: 0xf59e0b,
-      count: 4,
-      height: 25
+      count: 5,
+      height: 30,
+      hasShops: true
     });
 
-    // 14. Dattapara Mess Cluster
     const dMess = this.geoTo3D(23.8808, 90.3155);
-    this.createStudentVillage(dMess.x, dMess.z, {
+    this.createMessVillage(dMess.x, dMess.z, {
       id: "dattapara_mess_lane",
       title: "Dattapara Student Messes",
       color: 0xec4899,
-      count: 5,
-      height: 30
-    });
-
-    // 15. Khagan Bazar & Bus Stand
-    const kBaz = this.geoTo3D(23.8828, 90.3138);
-    this.createStudentVillage(kBaz.x, kBaz.z, {
-      id: "khagan_bazar",
-      title: "Khagan Bazar",
-      color: 0xf97316,
-      count: 5,
-      height: 22
-    });
-
-    // 16. Khagan Student Mess Lane
-    const kMess = this.geoTo3D(23.8839, 90.3129);
-    this.createStudentVillage(kMess.x, kMess.z, {
-      id: "khagan_student_mess",
-      title: "Khagan Mess Lane",
-      color: 0xa855f7,
       count: 6,
-      height: 35
+      height: 34,
+      hasWaterTanks: true
     });
 
-    // 17. Changaon Residential Intersection
+    // Changaon & Sadhupara
     const chgPos = this.geoTo3D(23.8742, 90.3175);
-    this.createStudentVillage(chgPos.x, chgPos.z, {
+    this.createMessVillage(chgPos.x, chgPos.z, {
       id: "changaon_hub",
       title: "Changaon Hub",
       color: 0x38bdf8,
-      count: 3,
-      height: 22
-    });
-
-    // 18. Changaon Hostels
-    const chgM = this.geoTo3D(23.8732, 90.3168);
-    this.createStudentVillage(chgM.x, chgM.z, {
-      id: "changaon_mess_lane",
-      title: "Changaon Hostels",
-      color: 0x818cf8,
       count: 4,
       height: 24
     });
 
-    // 19. Sadhupara Shortcut
+    const chgM = this.geoTo3D(23.8732, 90.3168);
+    this.createMessVillage(chgM.x, chgM.z, {
+      id: "changaon_mess_lane",
+      title: "Changaon Hostels",
+      color: 0x818cf8,
+      count: 4,
+      height: 26
+    });
+
     const sadhuPos = this.geoTo3D(23.8722, 90.3195);
     this.createBeaconNode(sadhuPos.x, sadhuPos.z, {
       id: "sadhupara_shortcut",
@@ -396,17 +959,18 @@ class Campus3DViewer {
       color: 0x10b981
     });
 
-    // 20. Daffodil Model Town Main Gate
+    // Daffodil Model Town
     const mtPos = this.geoTo3D(23.8850, 90.3225);
-    this.createStudentVillage(mtPos.x, mtPos.z, {
+    this.createMessVillage(mtPos.x, mtPos.z, {
       id: "model_town_gate",
       title: "Daffodil Model Town",
       color: 0x22c55e,
-      count: 5,
-      height: 28
+      count: 6,
+      height: 32,
+      isGated: true
     });
 
-    // 21. Kumkumari Junction
+    // Kumkumari Highway Junction
     const kumPos = this.geoTo3D(23.8872, 90.3115);
     this.createBeaconNode(kumPos.x, kumPos.z, {
       id: "kumkumari_junction",
@@ -415,535 +979,183 @@ class Campus3DViewer {
     });
   }
 
-  // ================= PROCEDURAL 3D SHAPES =================
-
-  createSkyscraper(x, z, config) {
+  createMessVillage(x, z, config) {
     const group = new THREE.Group();
     group.position.set(x, 0, z);
 
-    // Main tower core
-    const towerGeo = new THREE.BoxGeometry(config.width, config.height, config.depth);
-    const towerMat = new THREE.MeshStandardMaterial({
-      color: 0x0b1a14,
-      roughness: 0.2,
-      metalness: 0.85
-    });
-    const towerMesh = new THREE.Mesh(towerGeo, towerMat);
-    towerMesh.position.y = config.height / 2;
-    towerMesh.castShadow = true;
-    towerMesh.receiveShadow = true;
-    group.add(towerMesh);
-
-    // Glowing wireframe edge highlights
-    const edges = new THREE.EdgesGeometry(towerGeo);
-    const lineMat = new THREE.LineBasicMaterial({ color: 0x00f59b, linewidth: 2 });
-    const edgeLines = new THREE.LineSegments(edges, lineMat);
-    edgeLines.position.copy(towerMesh.position);
-    group.add(edgeLines);
-
-    // Upper tiered section
-    const tierGeo = new THREE.BoxGeometry(config.width * 0.7, 18, config.depth * 0.7);
-    const tierMesh = new THREE.Mesh(tierGeo, towerMat);
-    tierMesh.position.y = config.height + 9;
-    tierMesh.castShadow = true;
-    group.add(tierMesh);
-
-    const tierEdges = new THREE.EdgesGeometry(tierGeo);
-    const tierLine = new THREE.LineSegments(tierEdges, lineMat);
-    tierLine.position.copy(tierMesh.position);
-    group.add(tierLine);
-
-    // Top Sky Beacon Spire
-    const spireGeo = new THREE.ConeGeometry(2, 22, 8);
-    const spireMat = new THREE.MeshBasicMaterial({ color: 0x00f59b });
-    const spire = new THREE.Mesh(spireGeo, spireMat);
-    spire.position.y = config.height + 28;
-    group.add(spire);
-
-    // Rotating laser beacon beam
-    const beamGeo = new THREE.CylinderGeometry(0.8, 14, 180, 16);
-    const beamMat = new THREE.MeshBasicMaterial({
-      color: 0x00f59b,
-      transparent: true,
-      opacity: 0.35,
-      side: THREE.DoubleSide
-    });
-    const beam = new THREE.Mesh(beamGeo, beamMat);
-    beam.position.y = config.height + 110;
-    group.add(beam);
-    group.userData.beaconBeam = beam;
-
-    this.attachNodeInteraction(towerMesh, config.id, config.title);
-    this.createFloatingPin(group, config.height + 45, 0x00f59b, config.title);
-
-    this.buildingMeshes.set(config.id, group);
-    return group;
-  }
-
-  createTechBuilding(x, z, config) {
-    const group = new THREE.Group();
-    group.position.set(x, 0, z);
-
-    // Main modern block
-    const mainGeo = new THREE.BoxGeometry(config.width, config.height, config.depth);
-    const mainMat = new THREE.MeshStandardMaterial({
-      color: config.primaryColor,
-      roughness: 0.4,
-      metalness: 0.6
-    });
-    const mainMesh = new THREE.Mesh(mainGeo, mainMat);
-    mainMesh.position.y = config.height / 2;
-    mainMesh.castShadow = true;
-    mainMesh.receiveShadow = true;
-    group.add(mainMesh);
-
-    // Neon edge lines
-    const edges = new THREE.EdgesGeometry(mainGeo);
-    const lineMat = new THREE.LineBasicMaterial({ color: config.accentColor });
-    const wireframe = new THREE.LineSegments(edges, lineMat);
-    wireframe.position.copy(mainMesh.position);
-    group.add(wireframe);
-
-    // Rooftop cyber solar/lab pavilion
-    const roofGeo = new THREE.BoxGeometry(config.width * 0.5, 4, config.depth * 0.5);
-    const roofMat = new THREE.MeshStandardMaterial({ color: 0x10b981, roughness: 0.3 });
-    const roofMesh = new THREE.Mesh(roofGeo, roofMat);
-    roofMesh.position.y = config.height + 2;
-    group.add(roofMesh);
-
-    this.attachNodeInteraction(mainMesh, config.id, config.title);
-    this.createFloatingPin(group, config.height + 15, config.accentColor, config.title);
-
-    this.buildingMeshes.set(config.id, group);
-    return group;
-  }
-
-  createGlassLibrary(x, z, config) {
-    const group = new THREE.Group();
-    group.position.set(x, 0, z);
-
-    // Transparent modern cube
-    const libGeo = new THREE.BoxGeometry(config.width, config.height, config.depth);
-    const libMat = new THREE.MeshPhysicalMaterial({
-      color: 0x0284c7,
-      transparent: true,
-      opacity: 0.75,
-      roughness: 0.1,
-      metalness: 0.2,
-      transmission: 0.6,
-      ior: 1.5
-    });
-    const libMesh = new THREE.Mesh(libGeo, libMat);
-    libMesh.position.y = config.height / 2;
-    libMesh.castShadow = true;
-    group.add(libMesh);
-
-    // Neon edge border
-    const edges = new THREE.EdgesGeometry(libGeo);
-    const lineMat = new THREE.LineBasicMaterial({ color: 0x38bdf8 });
-    const wireframe = new THREE.LineSegments(edges, lineMat);
-    wireframe.position.copy(libMesh.position);
-    group.add(wireframe);
-
-    // Rooftop stylized open book sculpture
-    const bookGeo = new THREE.CylinderGeometry(8, 8, 3, 6);
-    const bookMat = new THREE.MeshBasicMaterial({ color: 0xf59e0b });
-    const bookMesh = new THREE.Mesh(bookGeo, bookMat);
-    bookMesh.position.y = config.height + 3;
-    group.add(bookMesh);
-
-    this.attachNodeInteraction(libMesh, config.id, config.title);
-    this.createFloatingPin(group, config.height + 15, 0x38bdf8, config.title);
-
-    this.buildingMeshes.set(config.id, group);
-    return group;
-  }
-
-  createCafeteria(x, z, config) {
-    const group = new THREE.Group();
-    group.position.set(x, 0, z);
-
-    // Open pavilion cylindrical base
-    const baseGeo = new THREE.CylinderGeometry(18, 20, 10, 16);
-    const baseMat = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.5 });
-    const baseMesh = new THREE.Mesh(baseGeo, baseMat);
-    baseMesh.position.y = 5;
-    baseMesh.castShadow = true;
-    group.add(baseMesh);
-
-    // Conical colorful glowing roof
-    const roofGeo = new THREE.ConeGeometry(22, 12, 16);
-    const roofMat = new THREE.MeshStandardMaterial({
-      color: 0xf59e0b,
-      emissive: 0xd97706,
-      emissiveIntensity: 0.2
-    });
-    const roofMesh = new THREE.Mesh(roofGeo, roofMat);
-    roofMesh.position.y = 16;
-    roofMesh.castShadow = true;
-    group.add(roofMesh);
-
-    // Outdoor umbrellas around food court
-    for (let i = 0; i < 4; i++) {
-      const angle = (i / 4) * Math.PI * 2;
-      const ux = Math.cos(angle) * 24;
-      const uz = Math.sin(angle) * 24;
-      const umbGeo = new THREE.ConeGeometry(3, 2, 8);
-      const umbMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
-      const umb = new THREE.Mesh(umbGeo, umbMat);
-      umb.position.set(ux, 3.5, uz);
-      group.add(umb);
-    }
-
-    this.attachNodeInteraction(baseMesh, config.id, config.title);
-    this.createFloatingPin(group, 26, 0xf59e0b, config.title);
-
-    this.buildingMeshes.set(config.id, group);
-    return group;
-  }
-
-  createMosque(x, z, config) {
-    const group = new THREE.Group();
-    group.position.set(x, 0, z);
-
-    // Main prayer hall cube
-    const hallGeo = new THREE.BoxGeometry(26, 16, 26);
-    const hallMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.2 });
-    const hallMesh = new THREE.Mesh(hallGeo, hallMat);
-    hallMesh.position.y = 8;
-    hallMesh.castShadow = true;
-    group.add(hallMesh);
-
-    // Golden Central Dome
-    const domeGeo = new THREE.SphereGeometry(9, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2);
-    const domeMat = new THREE.MeshStandardMaterial({
-      color: 0xfacc15,
-      metalness: 0.8,
-      roughness: 0.2
-    });
-    const domeMesh = new THREE.Mesh(domeGeo, domeMat);
-    domeMesh.position.y = 16;
-    group.add(domeMesh);
-
-    // Elegant tall minaret on northeast corner
-    const minaretBase = new THREE.CylinderGeometry(2, 2.5, 42, 12);
-    const minaretMat = new THREE.MeshStandardMaterial({ color: 0xf1f5f9 });
-    const minaret = new THREE.Mesh(minaretBase, minaretMat);
-    minaret.position.set(12, 21, 12);
-    group.add(minaret);
-
-    // Minaret top crescent cap
-    const topCapGeo = new THREE.ConeGeometry(2.5, 6, 8);
-    const topCapMat = new THREE.MeshBasicMaterial({ color: 0x10b981 });
-    const cap = new THREE.Mesh(topCapGeo, topCapMat);
-    cap.position.set(12, 45, 12);
-    group.add(cap);
-
-    this.attachNodeInteraction(hallMesh, config.id, config.title);
-    this.createFloatingPin(group, 32, 0x10b981, config.title);
-
-    this.buildingMeshes.set(config.id, group);
-    return group;
-  }
-
-  createWaterLake(x, z, config) {
-    const group = new THREE.Group();
-    group.position.set(x, 0, z);
-
-    // Shimmering reflective water surface
-    const lakeGeo = new THREE.PlaneGeometry(65, 38, 16, 16);
-    const lakeMat = new THREE.MeshStandardMaterial({
-      color: 0x0284c7,
-      roughness: 0.1,
-      metalness: 0.85,
-      transparent: true,
-      opacity: 0.85
-    });
-    const lake = new THREE.Mesh(lakeGeo, lakeMat);
-    lake.rotation.x = -Math.PI / 2;
-    lake.position.y = 0.8;
-    group.add(lake);
-    group.userData.water = lake;
-
-    // Glowing cyan shoreline ring
-    const shoreGeo = new THREE.RingGeometry(24, 26, 32);
-    const shoreMat = new THREE.MeshBasicMaterial({
-      color: 0x38bdf8,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.4
-    });
-    const shore = new THREE.Mesh(shoreGeo, shoreMat);
-    shore.rotation.x = -Math.PI / 2;
-    shore.position.y = 0.9;
-    group.add(shore);
-
-    // Small stylized greenery trees around the shore
-    for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI * 2;
-      const tx = Math.cos(angle) * 32;
-      const tz = Math.sin(angle) * 20;
-      const tree = this.createTree(tx, tz);
-      group.add(tree);
-    }
-
-    this.attachNodeInteraction(lake, config.id, config.title);
-    this.createFloatingPin(group, 15, 0x06b6d4, config.title);
-
-    this.buildingMeshes.set(config.id, group);
-    return group;
-  }
-
-  createSportsGround(x, z, config) {
-    const group = new THREE.Group();
-    group.position.set(x, 0, z);
-
-    // Green grass arena turf
-    const turfGeo = new THREE.PlaneGeometry(75, 48);
-    const turfMat = new THREE.MeshStandardMaterial({
-      color: 0x15803d,
-      roughness: 0.8
-    });
-    const turf = new THREE.Mesh(turfGeo, turfMat);
-    turf.rotation.x = -Math.PI / 2;
-    turf.position.y = 0.8;
-    group.add(turf);
-
-    // Cricket pitch strip in the middle
-    const pitchGeo = new THREE.PlaneGeometry(18, 5);
-    const pitchMat = new THREE.MeshBasicMaterial({ color: 0xd97706 });
-    const pitch = new THREE.Mesh(pitchGeo, pitchMat);
-    pitch.rotation.x = -Math.PI / 2;
-    pitch.position.y = 0.85;
-    group.add(pitch);
-
-    // 4 Corner floodlight towers
-    const corners = [
-      [-36, -23], [36, -23], [-36, 23], [36, 23]
-    ];
-    corners.forEach(([cx, cz]) => {
-      const towerGeo = new THREE.CylinderGeometry(0.5, 0.8, 22, 6);
-      const towerMat = new THREE.MeshBasicMaterial({ color: 0x94a3b8 });
-      const tower = new THREE.Mesh(towerGeo, towerMat);
-      tower.position.set(cx, 11, cz);
-      group.add(tower);
-
-      const lampGeo = new THREE.BoxGeometry(3, 1, 2);
-      const lampMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
-      const lamp = new THREE.Mesh(lampGeo, lampMat);
-      lamp.position.set(cx, 22, cz);
-      group.add(lamp);
-    });
-
-    this.attachNodeInteraction(turf, config.id, config.title);
-    this.createFloatingPin(group, 22, 0x22c55e, config.title);
-
-    this.buildingMeshes.set(config.id, group);
-    return group;
-  }
-
-  createEntranceGate(x, z, config) {
-    const group = new THREE.Group();
-    group.position.set(x, 0, z);
-
-    // Grand archway pillars
-    const p1 = new THREE.Mesh(new THREE.BoxGeometry(4, 18, 4), new THREE.MeshStandardMaterial({ color: 0x10b981 }));
-    p1.position.set(-12, 9, 0);
-    group.add(p1);
-
-    const p2 = new THREE.Mesh(new THREE.BoxGeometry(4, 18, 4), new THREE.MeshStandardMaterial({ color: 0x10b981 }));
-    p2.position.set(12, 9, 0);
-    group.add(p2);
-
-    // Overhead beam
-    const beam = new THREE.Mesh(new THREE.BoxGeometry(28, 4, 5), new THREE.MeshStandardMaterial({ color: 0x064e3b }));
-    beam.position.set(0, 18, 0);
-    group.add(beam);
-
-    // Glowing welcome banner
-    const sign = new THREE.Mesh(new THREE.PlaneGeometry(24, 2), new THREE.MeshBasicMaterial({ color: 0x00f59b }));
-    sign.position.set(0, 18, 2.6);
-    group.add(sign);
-
-    this.attachNodeInteraction(beam, config.id, config.title);
-    this.createFloatingPin(group, 25, 0x10b981, config.title);
-
-    this.buildingMeshes.set(config.id, group);
-    return group;
-  }
-
-  createTransportTerminal(x, z, config) {
-    const group = new THREE.Group();
-    group.position.set(x, 0, z);
-
-    // Parking lot tarmac
-    const lotGeo = new THREE.PlaneGeometry(42, 30);
-    const lotMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8 });
-    const lot = new THREE.Mesh(lotGeo, lotMat);
-    lot.rotation.x = -Math.PI / 2;
-    lot.position.y = 0.8;
-    group.add(lot);
-
-    // 2 DIU Campus buses parked
-    [-8, 8].forEach(bz => {
-      const busGeo = new THREE.BoxGeometry(16, 6, 7);
-      const busMat = new THREE.MeshStandardMaterial({ color: 0x059669 });
-      const bus = new THREE.Mesh(busGeo, busMat);
-      bus.position.set(0, 3.5, bz);
-      bus.castShadow = true;
-      group.add(bus);
-
-      // Bus roof stripe
-      const stripeGeo = new THREE.BoxGeometry(16, 1, 3);
-      const stripeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
-      const stripe = new THREE.Mesh(stripeGeo, stripeMat);
-      stripe.position.set(0, 6.6, bz);
-      group.add(stripe);
-    });
-
-    this.attachNodeInteraction(lot, config.id, config.title);
-    this.createFloatingPin(group, 16, 0x059669, config.title);
-
-    this.buildingMeshes.set(config.id, group);
-    return group;
-  }
-
-  createMedicalCenter(x, z, config) {
-    const group = new THREE.Group();
-    group.position.set(x, 0, z);
-
-    const bGeo = new THREE.BoxGeometry(22, 14, 20);
-    const bMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.3 });
-    const bMesh = new THREE.Mesh(bGeo, bMat);
-    bMesh.position.y = 7;
-    bMesh.castShadow = true;
-    group.add(bMesh);
-
-    // Red Cross emblem on top
-    const cross1 = new THREE.Mesh(new THREE.BoxGeometry(6, 1.8, 1.8), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
-    cross1.position.set(0, 15, 0);
-    group.add(cross1);
-    const cross2 = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.8, 6), new THREE.MeshBasicMaterial({ color: 0xef4444 }));
-    cross2.position.set(0, 15, 0);
-    group.add(cross2);
-
-    this.attachNodeInteraction(bMesh, config.id, config.title);
-    this.createFloatingPin(group, 22, 0xef4444, config.title);
-
-    this.buildingMeshes.set(config.id, group);
-    return group;
-  }
-
-  createStudentVillage(x, z, config) {
-    const group = new THREE.Group();
-    group.position.set(x, 0, z);
-
-    // Cluster of residential student apartment buildings
     for (let i = 0; i < config.count; i++) {
-      const offsetX = ((i % 3) - 1) * 16;
-      const offsetZ = (Math.floor(i / 3) - 0.5) * 16;
-      const h = config.height + ((i % 2) * 8);
+      const offsetX = ((i % 3) - 1) * 18;
+      const offsetZ = (Math.floor(i / 3) - 0.5) * 18;
+      const h = config.height + ((i % 3) * 6);
 
-      const bGeo = new THREE.BoxGeometry(12, h, 12);
-      const bMat = new THREE.MeshStandardMaterial({
-        color: 0x1e293b,
-        roughness: 0.6
-      });
+      // Apartment block
+      const bGeo = new THREE.BoxGeometry(13, h, 13);
+      const bMat = (i % 2 === 0) ? this.materials.warmStone : this.materials.redBrick;
       const bMesh = new THREE.Mesh(bGeo, bMat);
       bMesh.position.set(offsetX, h / 2, offsetZ);
       bMesh.castShadow = true;
       group.add(bMesh);
 
-      // Window edges
-      const edgeLines = new THREE.LineSegments(
-        new THREE.EdgesGeometry(bGeo),
-        new THREE.LineBasicMaterial({ color: config.color, transparent: true, opacity: 0.5 })
-      );
-      edgeLines.position.copy(bMesh.position);
-      group.add(edgeLines);
+      // Window recesses
+      for (let f = 1; f < Math.floor(h / 7); f++) {
+        const win = new THREE.Mesh(new THREE.BoxGeometry(13.2, 2.5, 9), this.materials.darkSlate);
+        win.position.set(offsetX, f * 7, offsetZ);
+        group.add(win);
+      }
+
+      // Rooftop Blue PVC Water Tanks (Classic Bangladeshi mess feature)
+      if (config.hasWaterTanks) {
+        const tank = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 1.8, 3, 10), new THREE.MeshStandardMaterial({ color: 0x0284c7 }));
+        tank.position.set(offsetX + 3, h + 1.5, offsetZ + 3);
+        group.add(tank);
+      }
+
+      // Ground-floor colorful shop awnings (Bazar/Hub feature)
+      if (config.hasShops && i < 2) {
+        const awning = new THREE.Mesh(new THREE.BoxGeometry(13, 1, 4), new THREE.MeshStandardMaterial({ color: 0xf59e0b }));
+        awning.position.set(offsetX, 4, offsetZ + 8);
+        group.add(awning);
+      }
     }
 
     // Interaction target
-    const hitBox = new THREE.Mesh(
-      new THREE.BoxGeometry(36, config.height, 36),
-      new THREE.MeshBasicMaterial({ visible: false })
-    );
+    const hitBox = new THREE.Mesh(new THREE.BoxGeometry(45, config.height, 45), new THREE.MeshBasicMaterial({ visible: false }));
     hitBox.position.y = config.height / 2;
     group.add(hitBox);
 
     this.attachNodeInteraction(hitBox, config.id, config.title);
-    this.createFloatingPin(group, config.height + 18, config.color, config.title);
+    this.createFloatingPin(group, config.height + 20, config.color, config.title);
 
     this.buildingMeshes.set(config.id, group);
     this.scene.add(group);
-    return group;
   }
 
   createBeaconNode(x, z, config) {
     const group = new THREE.Group();
     group.position.set(x, 0, z);
 
-    const poleGeo = new THREE.CylinderGeometry(0.8, 1.2, 16, 8);
-    const poleMat = new THREE.MeshBasicMaterial({ color: config.color });
-    const pole = new THREE.Mesh(poleGeo, poleMat);
-    pole.position.y = 8;
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(1, 1.4, 20, 8), this.materials.whiteConcrete);
+    pole.position.y = 10;
     group.add(pole);
 
     this.attachNodeInteraction(pole, config.id, config.title);
-    this.createFloatingPin(group, 22, config.color, config.title);
+    this.createFloatingPin(group, 24, config.color, config.title);
 
     this.buildingMeshes.set(config.id, group);
     this.scene.add(group);
-    return group;
+  }
+
+  // ================= VEGETATION & STREETLIGHTS =================
+  populateCampusEnvironment() {
+    // Add clusters of trees along avenues
+    const treeCoords = [
+      [20, 20], [-20, 20], [60, -30], [-50, -40],
+      [80, 70], [-70, 80], [30, -70], [-30, -70]
+    ];
+    treeCoords.forEach(([tx, tz]) => {
+      this.scene.add(this.createTree(tx, tz));
+    });
+
+    // Streetlights along main avenue
+    const streetLightCoords = [
+      [-15, 10], [15, 10], [0, 40], [0, 80], [-20, -20], [20, -20]
+    ];
+    streetLightCoords.forEach(([lx, lz]) => {
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.4, 14, 6), this.materials.whiteConcrete);
+      pole.position.set(lx, 7, lz);
+      this.scene.add(pole);
+
+      const lamp = new THREE.Mesh(new THREE.BoxGeometry(2, 0.6, 1), new THREE.MeshBasicMaterial({ color: 0xfef08a }));
+      lamp.position.set(lx, 14, lz);
+      this.scene.add(lamp);
+
+      const light = new THREE.PointLight(0xfef08a, 0, 45);
+      light.position.set(lx, 13, lz);
+      this.scene.add(light);
+      this.nightLights.push(light);
+    });
   }
 
   createTree(x, z) {
-    const treeGroup = new THREE.Group();
-    treeGroup.position.set(x, 0, z);
+    const group = new THREE.Group();
+    group.position.set(x, 0, z);
 
-    const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.6, 0.8, 4, 6),
-      new THREE.MeshStandardMaterial({ color: 0x5c4033 })
-    );
-    trunk.position.y = 2;
-    treeGroup.add(trunk);
+    const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 1, 5, 6), this.materials.timberWood);
+    trunk.position.y = 2.5;
+    group.add(trunk);
 
-    const foliage = new THREE.Mesh(
-      new THREE.ConeGeometry(3.5, 7, 7),
-      new THREE.MeshStandardMaterial({ color: 0x166534, roughness: 0.7 })
-    );
-    foliage.position.y = 6;
-    treeGroup.add(foliage);
+    // Multi-tiered lush green canopy
+    [6, 9.5, 12].forEach((ty, idx) => {
+      const radius = 5 - (idx * 1.1);
+      const foliage = new THREE.Mesh(
+        new THREE.ConeGeometry(radius, 4.5, 8),
+        new THREE.MeshStandardMaterial({ color: idx === 1 ? 0x166534 : 0x15803d, roughness: 0.8 })
+      );
+      foliage.position.y = ty;
+      foliage.castShadow = true;
+      group.add(foliage);
+    });
 
-    return treeGroup;
+    return group;
   }
 
   createFloatingPin(parentGroup, yHeight, colorHex, title) {
-    // Holographic diamond beacon above the landmark
-    const pinGeo = new THREE.OctahedronGeometry(2.8, 0);
+    const pinGeo = new THREE.OctahedronGeometry(3.5, 0);
     const pinMat = new THREE.MeshStandardMaterial({
       color: colorHex,
       emissive: colorHex,
       emissiveIntensity: 0.6,
-      roughness: 0.1,
       metalness: 0.8
     });
     const pin = new THREE.Mesh(pinGeo, pinMat);
     pin.position.y = yHeight;
     parentGroup.add(pin);
 
-    // Glowing vertical pulse ring
-    const ringGeo = new THREE.RingGeometry(3.5, 4.2, 16);
-    const ringMat = new THREE.MeshBasicMaterial({
-      color: colorHex,
-      side: THREE.DoubleSide,
-      transparent: true,
-      opacity: 0.6
-    });
-    const ring = new THREE.Mesh(ringGeo, ringMat);
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(4.2, 5.4, 16),
+      new THREE.MeshBasicMaterial({ color: colorHex, side: THREE.DoubleSide, transparent: true, opacity: 0.75 })
+    );
     ring.rotation.x = Math.PI / 2;
     ring.position.y = yHeight - 2;
     parentGroup.add(ring);
+
+    // 3D Canvas Text Billboard Sprite (Visible from afar)
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = 512;
+      canvas.height = 120;
+      const ctx = canvas.getContext('2d');
+      
+      // Rounded background pill
+      ctx.fillStyle = 'rgba(10, 15, 30, 0.92)';
+      ctx.beginPath();
+      if (typeof ctx.roundRect === 'function') {
+        ctx.roundRect(10, 10, 492, 100, 24);
+      } else {
+        ctx.rect(10, 10, 492, 100);
+      }
+      ctx.fill();
+      ctx.lineWidth = 5;
+      ctx.strokeStyle = '#' + Number(colorHex).toString(16).padStart(6, '0');
+      ctx.stroke();
+
+      // Clear readable title
+      ctx.font = 'bold 30px "Plus Jakarta Sans", sans-serif';
+      ctx.fillStyle = '#ffffff';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(title, 256, 60);
+
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.minFilter = THREE.LinearFilter;
+      const spriteMat = new THREE.SpriteMaterial({ map: texture, depthTest: false });
+      const sprite = new THREE.Sprite(spriteMat);
+      sprite.position.y = yHeight + 14;
+      sprite.scale.set(44, 10.5, 1);
+      parentGroup.add(sprite);
+    } catch (err) {
+      // Fallback
+    }
 
     parentGroup.userData.pin = pin;
     parentGroup.userData.ring = ring;
@@ -951,28 +1163,23 @@ class Campus3DViewer {
   }
 
   createAtmosphereParticles() {
-    // Ambient cyber dust particles floating over campus
-    const particleCount = 200;
-    const geometry = new THREE.BufferGeometry();
-    const positions = new Float32Array(particleCount * 3);
+    const count = 220;
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(count * 3);
 
-    for (let i = 0; i < particleCount * 3; i += 3) {
-      positions[i] = (Math.random() - 0.5) * 800;
-      positions[i + 1] = Math.random() * 120 + 5;
-      positions[i + 2] = (Math.random() - 0.5) * 800;
+    for (let i = 0; i < count * 3; i += 3) {
+      pos[i] = (Math.random() - 0.5) * 900;
+      pos[i + 1] = Math.random() * 140 + 5;
+      pos[i + 2] = (Math.random() - 0.5) * 900;
     }
-
-    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-    const material = new THREE.PointsMaterial({
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    this.particles = new THREE.Points(geo, new THREE.PointsMaterial({
       color: 0x10b981,
-      size: 2.2,
+      size: 2.4,
       transparent: true,
       opacity: 0.45,
       blending: THREE.AdditiveBlending
-    });
-
-    this.particles = new THREE.Points(geometry, material);
+    }));
     this.scene.add(this.particles);
   }
 
@@ -981,36 +1188,27 @@ class Campus3DViewer {
     this.interactiveObjects.push(mesh);
   }
 
-  // ================= 3D ROUTE VISUALIZATION =================
+  // ================= 3D LASER ROUTE HIGHLIGHTING =================
   highlightRoute(pathNodes) {
-    // Remove previous route line if any
     if (this.activeRouteLine) {
       this.scene.remove(this.activeRouteLine);
       this.activeRouteLine = null;
     }
-
     if (!pathNodes || pathNodes.length < 2) return;
 
-    // Create a 3D spline/line along the path
     const points = [];
     pathNodes.forEach(node => {
       const p = this.geoTo3D(node.lat, node.lng);
-      points.push(new THREE.Vector3(p.x, 3.5, p.z));
+      points.push(new THREE.Vector3(p.x, 3.8, p.z));
     });
 
-    // Create curved tube geometry for a 3D glowing laser ribbon
     const curve = new THREE.CatmullRomCurve3(points);
-    const tubeGeo = new THREE.TubeGeometry(curve, 64, 1.6, 8, false);
-    const tubeMat = new THREE.MeshBasicMaterial({
-      color: 0x00f59b,
-      transparent: true,
-      opacity: 0.95
-    });
+    const tubeGeo = new THREE.TubeGeometry(curve, 64, 1.8, 8, false);
+    const tubeMat = new THREE.MeshBasicMaterial({ color: 0x00f59b, transparent: true, opacity: 0.95 });
 
     this.activeRouteLine = new THREE.Mesh(tubeGeo, tubeMat);
     this.scene.add(this.activeRouteLine);
 
-    // Animate camera to frame the start and destination
     this.focusOnPath(pathNodes);
   }
 
@@ -1018,26 +1216,33 @@ class Campus3DViewer {
     if (!this.controls || !pathNodes.length) return;
     const startP = this.geoTo3D(pathNodes[0].lat, pathNodes[0].lng);
     const endP = this.geoTo3D(pathNodes[pathNodes.length - 1].lat, pathNodes[pathNodes.length - 1].lng);
-
-    const midX = (startP.x + endP.x) / 2;
-    const midZ = (startP.z + endP.z) / 2;
-
-    // Smoothly pan camera target to route center
-    this.controls.target.set(midX, 0, midZ);
+    this.controls.target.set((startP.x + endP.x) / 2, 0, (startP.z + endP.z) / 2);
   }
 
   resetCamera(viewMode = 'iso') {
     if (!this.controls) return;
     if (viewMode === 'iso') {
-      this.camera.position.set(0, 380, 480);
+      this.camera.position.set(0, 360, 490);
       this.controls.target.set(0, 0, 0);
     } else if (viewMode === 'top') {
-      this.camera.position.set(0, 650, 10);
+      this.camera.position.set(0, 720, 10);
       this.controls.target.set(0, 0, 0);
-    } else if (viewMode === 'tower') {
+    } else if (viewMode === 'diu' || viewMode === 'tower') {
       const ktPos = this.geoTo3D(23.8778, 90.3206);
-      this.camera.position.set(ktPos.x + 80, 120, ktPos.z + 120);
-      this.controls.target.set(ktPos.x, 40, ktPos.z);
+      this.camera.position.set(ktPos.x + 90, 140, ktPos.z + 130);
+      this.controls.target.set(ktPos.x, 30, ktPos.z);
+    } else if (viewMode === 'dattapara') {
+      const dPos = this.geoTo3D(23.8800, 90.3160);
+      this.camera.position.set(dPos.x + 100, 140, dPos.z + 120);
+      this.controls.target.set(dPos.x, 20, dPos.z);
+    } else if (viewMode === 'chandgaon') {
+      const cPos = this.geoTo3D(23.8738, 90.3172);
+      this.camera.position.set(cPos.x + 90, 130, cPos.z + 110);
+      this.controls.target.set(cPos.x, 20, cPos.z);
+    } else if (viewMode === 'khagan') {
+      const kPos = this.geoTo3D(23.8835, 90.3135);
+      this.camera.position.set(kPos.x + 110, 150, kPos.z + 130);
+      this.controls.target.set(kPos.x, 20, kPos.z);
     }
   }
 
@@ -1047,7 +1252,6 @@ class Campus3DViewer {
     return this.isAutoRotating;
   }
 
-  // ================= RAYCASTING & INTERACTION =================
   onPointerMove(event) {
     const rect = this.renderer.domElement.getBoundingClientRect();
     this.mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
@@ -1093,7 +1297,7 @@ class Campus3DViewer {
       tip.className = 'three-hud-tooltip';
       document.body.appendChild(tip);
     }
-    tip.textContent = text;
+    tip.innerHTML = `<i class="fa-solid fa-location-dot" style="color: #00f59b; margin-right: 6px;"></i> ${text}`;
     tip.style.display = 'block';
     tip.style.left = `${x + 14}px`;
     tip.style.top = `${y - 12}px`;
@@ -1115,23 +1319,23 @@ class Campus3DViewer {
     }
   }
 
-  // ================= RENDER LOOP =================
+  // ================= ANIMATION LOOP =================
   animate() {
     requestAnimationFrame(this.animate);
     const delta = this.clock.getDelta();
     const time = this.clock.getElapsedTime();
 
-    // Rotate Knowledge Tower beacon beam
+    // Rotate Knowledge Tower beacon
     const ktGroup = this.buildingMeshes.get("knowledge_tower");
     if (ktGroup && ktGroup.userData.beaconBeam) {
       ktGroup.userData.beaconBeam.rotation.y += 0.02;
     }
 
-    // Animate floating pin diamonds (gentle bobbing & rotation)
+    // Bobbing & rotating floating pins
     this.buildingMeshes.forEach(group => {
       if (group.userData.pin) {
         group.userData.pin.rotation.y += 0.015;
-        group.userData.pin.position.y = group.userData.baseY + Math.sin(time * 2) * 1.5;
+        group.userData.pin.position.y = group.userData.baseY + Math.sin(time * 2.2) * 1.6;
       }
       if (group.userData.ring) {
         const scale = 1 + Math.sin(time * 3) * 0.15;
@@ -1139,12 +1343,12 @@ class Campus3DViewer {
       }
     });
 
-    // Animate particles
+    // Particle flow
     if (this.particles) {
-      const positions = this.particles.geometry.attributes.position.array;
-      for (let i = 1; i < positions.length; i += 3) {
-        positions[i] += delta * 4;
-        if (positions[i] > 120) positions[i] = 5;
+      const pos = this.particles.geometry.attributes.position.array;
+      for (let i = 1; i < pos.length; i += 3) {
+        pos[i] += delta * 4;
+        if (pos[i] > 140) pos[i] = 5;
       }
       this.particles.geometry.attributes.position.needsUpdate = true;
     }
